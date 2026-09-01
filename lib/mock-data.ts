@@ -18,6 +18,13 @@ export type BiopsyStatus =
 
 export type TreatmentSite = "ÚVN" | "Motol" | "Externí";
 
+export type ExternalBiopsyResult = {
+  date: string;
+  facility: string;
+  reportReference: string;
+  conclusion: string;
+};
+
 export type EventKind =
   | "intake"
   | "pathology"
@@ -51,6 +58,7 @@ export type Patient = {
   diagnosisCertainty: "Suspektní" | "Předběžně potvrzená" | "Histologicky potvrzená";
   intakeDate: string;
   biopsyStatus: BiopsyStatus;
+  externalBiopsy: ExternalBiopsyResult | null;
   mdtDate: string | null;
   treatmentRoute: TreatmentRoute | null;
   treatmentSite: TreatmentSite | null;
@@ -98,6 +106,7 @@ export const initialPatients: Patient[] = [
     diagnosisCertainty: "Histologicky potvrzená",
     intakeDate: "2026-08-12",
     biopsyStatus: "Provedena v ÚVN",
+    externalBiopsy: null,
     mdtDate: "2026-08-27",
     treatmentRoute: "Primární operace",
     treatmentSite: "ÚVN",
@@ -160,6 +169,12 @@ export const initialPatients: Patient[] = [
     diagnosisCertainty: "Předběžně potvrzená",
     intakeDate: "2026-08-24",
     biopsyStatus: "Provedena externě",
+    externalBiopsy: {
+      date: "2026-08-18",
+      facility: "Krajská nemocnice Demo",
+      reportReference: "HIST-DEMO-2026-1842",
+      conclusion: "Suspektní high-grade serózní karcinom; preparáty předány k revizi.",
+    },
     mdtDate: null,
     treatmentRoute: null,
     treatmentSite: null,
@@ -213,6 +228,7 @@ export const initialPatients: Patient[] = [
     diagnosisCertainty: "Histologicky potvrzená",
     intakeDate: "2026-07-30",
     biopsyStatus: "Provedena v ÚVN",
+    externalBiopsy: null,
     mdtDate: "2026-09-01",
     treatmentRoute: null,
     treatmentSite: null,
@@ -266,6 +282,7 @@ export const initialPatients: Patient[] = [
     diagnosisCertainty: "Histologicky potvrzená",
     intakeDate: "2026-05-14",
     biopsyStatus: "Provedena v ÚVN",
+    externalBiopsy: null,
     mdtDate: "2026-05-21",
     treatmentRoute: "Primární operace",
     treatmentSite: "ÚVN",
@@ -319,6 +336,7 @@ export const initialPatients: Patient[] = [
     diagnosisCertainty: "Histologicky potvrzená",
     intakeDate: "2026-08-31",
     biopsyStatus: "Nutno provést",
+    externalBiopsy: null,
     mdtDate: null,
     treatmentRoute: null,
     treatmentSite: null,

@@ -1406,6 +1406,69 @@ p {
   font-size: 10px;
 }
 
+.external-biopsy-result {
+  margin: 0 20px 20px;
+  padding: 14px;
+  border: 1px solid #cfe4e0;
+  border-radius: 10px;
+  background: #f4fbfa;
+}
+
+.external-biopsy-result-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.external-biopsy-result-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--teal-dark);
+  background: #dcefeb;
+}
+
+.external-biopsy-result-header > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.external-biopsy-result-header span,
+.external-biopsy-result-meta span {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.external-biopsy-result-header strong {
+  color: var(--ink);
+  font-size: 10px;
+}
+
+.external-biopsy-result p {
+  margin: 12px 0;
+  color: var(--ink);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.external-biopsy-result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  padding-top: 10px;
+  border-top: 1px solid #d9eae7;
+}
+
+.external-biopsy-result-meta strong {
+  color: var(--muted-strong);
+  font-weight: 680;
+}
+
 .care-pathway-panel {
   padding-bottom: 21px;
 }
@@ -2339,6 +2402,42 @@ p {
   color: var(--muted);
   font-size: 7px;
   line-height: 1.4;
+}
+
+.external-biopsy-fields {
+  margin-top: 13px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.external-biopsy-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+  color: var(--teal-dark);
+}
+
+.external-biopsy-heading > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.external-biopsy-heading strong {
+  color: var(--ink);
+  font-size: 9px;
+}
+
+.external-biopsy-heading small {
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.external-biopsy-fields .form-grid {
+  gap: 12px;
 }
 
 .form-error {

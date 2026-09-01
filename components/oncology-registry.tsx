@@ -964,6 +964,30 @@ function PatientDetail({
                 <strong>{patient.secondaryDiagnoses.join(", ") || "Bez záznamu"}</strong>
               </div>
             </div>
+            {patient.externalBiopsy ? (
+              <article className="external-biopsy-result">
+                <div className="external-biopsy-result-header">
+                  <span className="external-biopsy-result-icon">
+                    <Microscope size={18} aria-hidden="true" />
+                  </span>
+                  <div>
+                    <span>Výsledek externí biopsie</span>
+                    <strong>{patient.externalBiopsy.facility}</strong>
+                  </div>
+                </div>
+                <p>{patient.externalBiopsy.conclusion}</p>
+                <div className="external-biopsy-result-meta">
+                  <span>
+                    Datum odběru / výkonu: <strong>{formatLongDate(patient.externalBiopsy.date)}</strong>
+                  </span>
+                  {patient.externalBiopsy.reportReference ? (
+                    <span>
+                      Reference nálezu: <strong>{patient.externalBiopsy.reportReference}</strong>
+                    </span>
+                  ) : null}
+                </div>
+              </article>
+            ) : null}
           </section>
 
           <section className="panel care-pathway-panel">
@@ -1205,6 +1229,10 @@ function NewPatientModal({
   const [primaryDiagnosis, setPrimaryDiagnosis] = useState("C54.1");
   const [certainty, setCertainty] = useState<Patient["diagnosisCertainty"]>("Suspektní");
   const [biopsyStatus, setBiopsyStatus] = useState<BiopsyStatus>("Nutno provést");
+  const [externalBiopsyDate, setExternalBiopsyDate] = useState("");
+  const [externalBiopsyFacility, setExternalBiopsyFacility] = useState("");
+  const [externalBiopsyReference, setExternalBiopsyReference] = useState("");
+  const [externalBiopsyConclusion, setExternalBiopsyConclusion] = useState("");
   const [secondaryDiagnoses, setSecondaryDiagnoses] = useState<string[]>([]);
   const [secondarySelection, setSecondarySelection] = useState("");
   const [formError, setFormError] = useState("");
@@ -1228,6 +1256,12 @@ function NewPatientModal({
     setPrimaryDiagnosis("C54.1");
     setCertainty("Předběžně potvrzená");
     setBiopsyStatus("Provedena externě");
+    setExternalBiopsyDate("2026-08-25");
+    setExternalBiopsyFacility("Nemocnice Demo");
+    setExternalBiopsyReference("HIST-DEMO-2026-0001");
+    setExternalBiopsyConclusion(
+      "Endometrioidní adenokarcinom endometria, FIGO grade 2 (demo výsledek).",
+    );
     setFormError("");
   };
 
@@ -1247,11 +1281,30 @@ function NewPatientModal({
       setFormError("Vyplňte jméno a příjmení.");
       return;
     }
+    if (
+      biopsyStatus === "Provedena externě" &&
+      (!externalBiopsyDate || !externalBiopsyFacility.trim() || !externalBiopsyConclusion.trim())
+    ) {
+      setFormError(
+        "U externí biopsie vyplňte datum, pracoviště a závěr histologického nálezu.",
+      );
+      return;
+    }
 
-    const id = `demo-${Date.now()}`;
+    const timestamp = Date.now();
+    const id = `demo-${timestamp}`;
     const biopsyAlreadyCompleted = biopsyStatus !== "Nutno provést";
+    const externalBiopsy: Patient["externalBiopsy"] =
+      biopsyStatus === "Provedena externě"
+        ? {
+            date: externalBiopsyDate,
+            facility: externalBiopsyFacility.trim(),
+            reportReference: externalBiopsyReference.trim(),
+            conclusion: externalBiopsyConclusion.trim(),
+          }
+        : null;
     const intakeEvent: TimelineEvent = {
-      id: `event-${Date.now()}-intake`,
+      id: `event-${timestamp}-intake`,
       kind: "intake",
       date: intakeDate,
       title: "Přijetí pacienta do péče",
@@ -1262,11 +1315,19 @@ function NewPatientModal({
     const events: TimelineEvent[] = biopsyAlreadyCompleted
       ? [
           {
-            id: `event-${Date.now()}-biopsy`,
+            id: `event-${timestamp}-biopsy`,
             kind: "pathology",
-            date: intakeDate,
-            title: "Biopsie doložena při příjmu",
-            description: `${biopsyStatus}. Druhá biopsie se neplánuje; další krok je staging.`,
+            date: externalBiopsy?.date ?? intakeDate,
+            title: externalBiopsy
+              ? "Externí biopsie doložena při příjmu"
+              : "Biopsie doložena při příjmu",
+            description: externalBiopsy
+              ? `${externalBiopsy.facility}: ${externalBiopsy.conclusion}${
+                  externalBiopsy.reportReference
+                    ? ` Reference nálezu: ${externalBiopsy.reportReference}.`
+                    : ""
+                } Druhá biopsie se neplánuje; další krok je staging.`
+              : `${biopsyStatus}. Druhá biopsie se neplánuje; další krok je staging.`,
             author: "Andrej Demo",
             status: "Dokončeno",
           },
@@ -1287,6 +1348,7 @@ function NewPatientModal({
       diagnosisCertainty: certainty,
       intakeDate,
       biopsyStatus,
+      externalBiopsy,
       mdtDate: null,
       treatmentRoute: null,
       treatmentSite: null,
@@ -1483,6 +1545,57 @@ function NewPatientModal({
                     </label>
                   ))}
                 </div>
+                {biopsyStatus === "Provedena externě" ? (
+                  <div className="external-biopsy-fields" aria-live="polite">
+                    <div className="external-biopsy-heading">
+                      <div>
+                        <strong>Výsledek externí biopsie</strong>
+                        <small>
+                          Zapište údaje z doloženého histologického nálezu. Reference je volitelná.
+                        </small>
+                      </div>
+                      <Microscope size={19} aria-hidden="true" />
+                    </div>
+                    <div className="form-grid two-columns">
+                      <label className="form-field">
+                        <span>Datum odběru / výkonu *</span>
+                        <input
+                          type="date"
+                          value={externalBiopsyDate}
+                          onChange={(event) => setExternalBiopsyDate(event.target.value)}
+                          required
+                        />
+                      </label>
+                      <label className="form-field">
+                        <span>Externí pracoviště *</span>
+                        <input
+                          value={externalBiopsyFacility}
+                          onChange={(event) => setExternalBiopsyFacility(event.target.value)}
+                          placeholder="Např. Nemocnice Demo"
+                          required
+                        />
+                      </label>
+                      <label className="form-field full-column">
+                        <span>Reference nálezu</span>
+                        <input
+                          value={externalBiopsyReference}
+                          onChange={(event) => setExternalBiopsyReference(event.target.value)}
+                          placeholder="Číslo biopsie / histologického nálezu"
+                        />
+                      </label>
+                      <label className="form-field full-column">
+                        <span>Závěr histologického nálezu *</span>
+                        <textarea
+                          value={externalBiopsyConclusion}
+                          onChange={(event) => setExternalBiopsyConclusion(event.target.value)}
+                          rows={4}
+                          placeholder="Stručný závěr externího histologického nálezu…"
+                          required
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ) : null}
               </fieldset>
             </div>
           </div>
