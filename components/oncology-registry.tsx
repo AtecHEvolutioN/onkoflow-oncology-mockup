@@ -1,0 +1,1608 @@
+"use client";
+
+import {
+  Activity,
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  Bell,
+  CalendarDays,
+  Check,
+  ChevronRight,
+  CircleCheck,
+  ClipboardList,
+  Clock3,
+  Eye,
+  FileCheck2,
+  FilePlus2,
+  HeartPulse,
+  History,
+  LayoutDashboard,
+  ListChecks,
+  LockKeyhole,
+  Menu,
+  Microscope,
+  PencilLine,
+  Plus,
+  ScanLine,
+  Search,
+  ShieldCheck,
+  Stethoscope,
+  Users,
+  UsersRound,
+  X,
+} from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  BiopsyStatus,
+  CarePhase,
+  EventKind,
+  Patient,
+  TimelineEvent,
+  demoAuditEvents,
+  demoTasks,
+  diagnoses,
+  initialPatients,
+  corePathwaySteps,
+  processSummarySteps,
+  treatmentRoutes,
+} from "@/lib/mock-data";
+
+type View = "dashboard" | "patients" | "patient" | "tasks" | "audit";
+
+type BirthNumberResult = {
+  date: string;
+  checksumValid: boolean | null;
+  error: string;
+};
+
+const demoToday = new Date("2026-09-01T12:00:00");
+
+const navItems: Array<{
+  id: Exclude<View, "patient">;
+  label: string;
+  icon: typeof LayoutDashboard;
+}> = [
+  { id: "dashboard", label: "Přehled", icon: LayoutDashboard },
+  { id: "patients", label: "Pacienti", icon: Users },
+  { id: "tasks", label: "Úkoly a termíny", icon: ListChecks },
+  { id: "audit", label: "Auditní stopa", icon: History },
+];
+
+const eventIcons: Record<EventKind, typeof ClipboardList> = {
+  intake: FilePlus2,
+  pathology: Microscope,
+  imaging: ScanLine,
+  mdt: UsersRound,
+  surgery: Stethoscope,
+  systemic: Activity,
+  followup: CalendarDays,
+  recurrence: History,
+};
+
+const eventKindLabels: Record<EventKind, string> = {
+  intake: "Přijetí do péče",
+  pathology: "Patologie",
+  imaging: "Zobrazovací vyšetření",
+  mdt: "Multidisciplinární tým",
+  surgery: "Operační léčba",
+  systemic: "Systémová léčba",
+  followup: "Kontrola",
+  recurrence: "Recidiva",
+};
+
+function formatDate(value: string, includeYear = true) {
+  const date = new Date(`${value}T12:00:00`);
+  return new Intl.DateTimeFormat("cs-CZ", {
+    day: "numeric",
+    month: "short",
+    ...(includeYear ? { year: "numeric" } : {}),
+  }).format(date);
+}
+
+function formatLongDate(value: string) {
+  const date = new Date(`${value}T12:00:00`);
+  return new Intl.DateTimeFormat("cs-CZ", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
+
+function calculateAge(value: string) {
+  const birth = new Date(`${value}T12:00:00`);
+  let age = demoToday.getFullYear() - birth.getFullYear();
+  const monthDifference = demoToday.getMonth() - birth.getMonth();
+  if (monthDifference < 0 || (monthDifference === 0 && demoToday.getDate() < birth.getDate())) {
+    age -= 1;
+  }
+  return age;
+}
+
+function parseBirthNumber(value: string): BirthNumberResult {
+  const digits = value.replace(/\D/g, "");
+
+  if (!digits) {
+    return { date: "", checksumValid: null, error: "" };
+  }
+
+  if (digits.length !== 9 && digits.length !== 10) {
+    return {
+      date: "",
+      checksumValid: null,
+      error: "Rodné číslo musí obsahovat 9 nebo 10 číslic.",
+    };
+  }
+
+  const yearPart = Number(digits.slice(0, 2));
+  const encodedMonth = Number(digits.slice(2, 4));
+  const day = Number(digits.slice(4, 6));
+  let month = encodedMonth;
+
+  if (month > 70) month -= 70;
+  else if (month > 50) month -= 50;
+  else if (month > 20) month -= 20;
+
+  const year = digits.length === 9 || yearPart >= 54 ? 1900 + yearPart : 2000 + yearPart;
+  const candidate = new Date(Date.UTC(year, month - 1, day));
+  const dateValid =
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    candidate.getUTCFullYear() === year &&
+    candidate.getUTCMonth() === month - 1 &&
+    candidate.getUTCDate() === day;
+
+  if (!dateValid) {
+    return {
+      date: "",
+      checksumValid: null,
+      error: "Zakódované datum není platné.",
+    };
+  }
+
+  let checksumValid: boolean | null = null;
+  if (digits.length === 10) {
+    const fullNumber = BigInt(digits);
+    checksumValid = fullNumber % 11n === 0n;
+
+    if (!checksumValid && year < 1986 && digits.endsWith("0")) {
+      const firstNine = BigInt(digits.slice(0, 9));
+      checksumValid = firstNine % 11n === 10n;
+    }
+  }
+
+  const date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  return { date, checksumValid, error: "" };
+}
+
+function maskBirthNumber(value: string) {
+  const digits = value.replace(/\D/g, "");
+  const suffix = digits.slice(-4).padStart(4, "•");
+  return `••••••/${suffix}`;
+}
+
+const phaseStyleIndex: Record<CarePhase, number> = {
+  Příjem: 1,
+  Biopsie: 1,
+  Staging: 2,
+  MDT: 3,
+  "Primární operace": 4,
+  "Neoadjuvantní léčba": 4,
+  Paliace: 4,
+  Sledování: 5,
+  Recidiva: 5,
+};
+
+function PhaseBadge({ phase }: { phase: CarePhase }) {
+  return <span className={`phase-badge phase-${phaseStyleIndex[phase]}`}>{phase}</span>;
+}
+
+function PatientPathway({ patient }: { patient: Patient }) {
+  const currentCoreIndex = corePathwaySteps.findIndex((step) => step.phase === patient.phase);
+  const corePathCompleted = currentCoreIndex === -1;
+
+  return (
+    <div className="clinical-pathway">
+      <div className="pathway-steps">
+        {corePathwaySteps.map((step, index) => {
+          const completed = corePathCompleted || index < currentCoreIndex;
+          const active = index === currentCoreIndex;
+          let detail = step.detail;
+
+          if (step.phase === "Příjem") detail = formatDate(patient.intakeDate);
+          if (step.phase === "Biopsie") detail = patient.biopsyStatus;
+          if (step.phase === "MDT") {
+            detail = patient.mdtDate ? formatDate(patient.mdtDate) : "Datum zatím neurčeno";
+          }
+
+          return (
+            <div
+              className={`pathway-step ${completed ? "completed" : ""} ${active ? "current" : ""}`}
+              key={step.phase}
+            >
+              <div className="pathway-node">
+                {completed ? <Check size={15} aria-hidden="true" /> : step.number}
+              </div>
+              <strong>{step.phase}</strong>
+              <span>{detail}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="treatment-decision-heading">
+        <span>5</span>
+        <div>
+          <strong>Rozhodnutí po MDT</strong>
+          <small>
+            {patient.treatmentRoute
+              ? `Zvolená větev: ${patient.treatmentRoute}`
+              : "Léčebná větev zatím nebyla určena"}
+          </small>
+        </div>
+      </div>
+
+      <div className="treatment-route-grid">
+        {treatmentRoutes.map((route) => {
+          const selected = patient.treatmentRoute === route.phase;
+          const completed = selected && patient.phase === "Sledování";
+          return (
+            <div
+              className={`treatment-route ${selected ? "selected" : ""} ${completed ? "completed" : ""}`}
+              key={route.code}
+            >
+              <span className="route-code">{route.code}</span>
+              <div>
+                <strong>{route.phase}</strong>
+                <small>
+                  {selected && patient.treatmentSite ? patient.treatmentSite : route.sites}
+                </small>
+                {route.next && (
+                  <span className="route-next">
+                    <ArrowRight size={13} aria-hidden="true" /> {route.next}
+                  </span>
+                )}
+              </div>
+              {selected && <CircleCheck size={18} aria-label="Zvolená léčebná větev" />}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className={`recurrence-route ${patient.recurrence ? "active" : ""}`}>
+        <span>6</span>
+        <div>
+          <strong>Recidiva</strong>
+          <small>
+            {patient.recurrence
+              ? "Aktivní recidiva evidovaná v této epizodě"
+              : "Samostatně sledovaná větev procesu"}
+          </small>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({
+  title,
+  description,
+  onAction,
+}: {
+  title: string;
+  description: string;
+  onAction: () => void;
+}) {
+  return (
+    <div className="empty-state">
+      <div className="empty-state-icon">
+        <Search size={22} aria-hidden="true" />
+      </div>
+      <h3>{title}</h3>
+      <p>{description}</p>
+      <button className="button button-secondary" type="button" onClick={onAction}>
+        Zrušit filtr
+      </button>
+    </div>
+  );
+}
+
+export function OncologyRegistry() {
+  const [patients, setPatients] = useState<Patient[]>(initialPatients);
+  const [activeView, setActiveView] = useState<View>("dashboard");
+  const [selectedPatientId, setSelectedPatientId] = useState(initialPatients[0].id);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isNewPatientOpen, setIsNewPatientOpen] = useState(false);
+  const [isNewEventOpen, setIsNewEventOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [toast, setToast] = useState("");
+
+  const selectedPatient =
+    patients.find((patient) => patient.id === selectedPatientId) ?? patients[0];
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(""), 3200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const navigate = (view: View) => {
+    setActiveView(view);
+    setSidebarOpen(false);
+    if (view !== "patients") setSearchQuery("");
+  };
+
+  const openPatient = (id: string) => {
+    setSelectedPatientId(id);
+    setActiveView("patient");
+    setSidebarOpen(false);
+  };
+
+  const createPatient = (patient: Patient) => {
+    setPatients((current) => [patient, ...current]);
+    setSelectedPatientId(patient.id);
+    setActiveView("patient");
+    setIsNewPatientOpen(false);
+    setToast("Pacient byl přidán do demo registru.");
+  };
+
+  const addEvent = (event: TimelineEvent) => {
+    setPatients((current) =>
+      current.map((patient) =>
+        patient.id === selectedPatientId
+          ? {
+              ...patient,
+              ...(event.kind === "recurrence"
+                ? {
+                    phase: "Recidiva" as const,
+                    recurrence: true,
+                    priority: "Vysoká" as const,
+                    nextStep: "Restaging a nové rozhodnutí MDT",
+                    nextStepDate: event.date,
+                  }
+                : {}),
+              events: [event, ...patient.events],
+            }
+          : patient,
+      ),
+    );
+    setIsNewEventOpen(false);
+    setToast("Nová událost byla přidána do časové osy.");
+  };
+
+  return (
+    <div className="app-shell">
+      <aside className={`sidebar ${sidebarOpen ? "sidebar-open" : ""}`}>
+        <div className="brand">
+          <div className="brand-mark" aria-hidden="true">
+            <HeartPulse size={24} />
+          </div>
+          <div>
+            <div className="brand-name">OnkoFlow</div>
+            <div className="brand-subtitle">Registr onkologické péče</div>
+          </div>
+          <button
+            className="sidebar-close"
+            type="button"
+            aria-label="Zavřít navigaci"
+            onClick={() => setSidebarOpen(false)}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <nav className="main-nav" aria-label="Hlavní navigace">
+          <p className="nav-label">Pracovní prostor</p>
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const active =
+              activeView === item.id || (item.id === "patients" && activeView === "patient");
+            return (
+              <button
+                className={`nav-item ${active ? "active" : ""}`}
+                key={item.id}
+                type="button"
+                onClick={() => navigate(item.id)}
+              >
+                <Icon size={19} aria-hidden="true" />
+                <span>{item.label}</span>
+                {item.id === "tasks" && <span className="nav-count">4</span>}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="sidebar-spacer" />
+
+        <div className="security-card">
+          <ShieldCheck size={20} aria-hidden="true" />
+          <div>
+            <strong>Demo prostředí</strong>
+            <span>Bez napojení na databázi</span>
+          </div>
+        </div>
+
+        <div className="user-card">
+          <div className="avatar avatar-small">AD</div>
+          <div className="user-card-copy">
+            <strong>Andrej Demo</strong>
+            <span>Lékař · mockup</span>
+          </div>
+          <ChevronRight size={17} aria-hidden="true" />
+        </div>
+      </aside>
+
+      {sidebarOpen && (
+        <button
+          className="sidebar-backdrop"
+          type="button"
+          aria-label="Zavřít navigaci"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <main className="main-content">
+        <div className="demo-banner" role="status">
+          <AlertTriangle size={16} aria-hidden="true" />
+          <span>
+            <strong>Interaktivní mockup.</strong> Používejte pouze smyšlené údaje — nic se
+            neukládá na server.
+          </span>
+        </div>
+
+        <header className="topbar">
+          <button
+            className="icon-button menu-button"
+            type="button"
+            aria-label="Otevřít navigaci"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <Menu size={21} />
+          </button>
+          <div className="topbar-location">
+            <span>Onkologické centrum</span>
+            <strong>Gynekologická onkologie</strong>
+          </div>
+          <div className="topbar-actions">
+            <div className="system-status">
+              <span className="status-dot" />
+              Demo režim
+            </div>
+            <button className="icon-button notification-button" type="button" aria-label="Oznámení">
+              <Bell size={20} />
+              <span className="notification-dot" />
+            </button>
+            <button
+              className="button button-primary topbar-new"
+              type="button"
+              onClick={() => setIsNewPatientOpen(true)}
+            >
+              <Plus size={18} aria-hidden="true" />
+              Nový pacient
+            </button>
+          </div>
+        </header>
+
+        <section className="page-content">
+          {activeView === "dashboard" && (
+            <DashboardView patients={patients} openPatient={openPatient} navigate={navigate} />
+          )}
+          {activeView === "patients" && (
+            <PatientsView
+              patients={patients}
+              query={searchQuery}
+              setQuery={setSearchQuery}
+              openPatient={openPatient}
+              openNewPatient={() => setIsNewPatientOpen(true)}
+            />
+          )}
+          {activeView === "patient" && selectedPatient && (
+            <PatientDetail
+              patient={selectedPatient}
+              goBack={() => navigate("patients")}
+              openNewEvent={() => setIsNewEventOpen(true)}
+            />
+          )}
+          {activeView === "tasks" && <TasksView openPatient={openPatient} />}
+          {activeView === "audit" && <AuditView />}
+        </section>
+      </main>
+
+      {isNewPatientOpen && (
+        <NewPatientModal onClose={() => setIsNewPatientOpen(false)} onCreate={createPatient} />
+      )}
+
+      {isNewEventOpen && selectedPatient && (
+        <NewEventModal
+          patient={selectedPatient}
+          onClose={() => setIsNewEventOpen(false)}
+          onCreate={addEvent}
+        />
+      )}
+
+      {toast && (
+        <div className="toast" role="status">
+          <CircleCheck size={19} aria-hidden="true" />
+          {toast}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DashboardView({
+  patients,
+  openPatient,
+  navigate,
+}: {
+  patients: Patient[];
+  openPatient: (id: string) => void;
+  navigate: (view: View) => void;
+}) {
+  const highPriority = patients.filter((patient) => patient.priority === "Vysoká").length;
+  const inTreatment = patients.filter(
+    (patient) =>
+      patient.phase === "Primární operace" ||
+      patient.phase === "Neoadjuvantní léčba" ||
+      patient.phase === "Paliace",
+  ).length;
+  const recentPatients = patients.slice(0, 4);
+
+  return (
+    <>
+      <div className="page-heading heading-with-action">
+        <div>
+          <p className="eyebrow">Úterý · 1. září 2026</p>
+          <h1>Přehled péče</h1>
+          <p>Aktuální stav pacientů a nejbližší kroky v onkologickém procesu.</p>
+        </div>
+        <button className="button button-secondary" type="button" onClick={() => navigate("tasks")}>
+          <CalendarDays size={17} aria-hidden="true" />
+          Zobrazit kalendář
+        </button>
+      </div>
+
+      <div className="metric-grid">
+        <button className="metric-card" type="button" onClick={() => navigate("patients")}>
+          <div className="metric-icon metric-blue">
+            <Users size={21} aria-hidden="true" />
+          </div>
+          <span className="metric-label">Aktivní pacienti</span>
+          <strong>{patients.length}</strong>
+          <span className="metric-caption">v demo registru</span>
+        </button>
+        <button className="metric-card" type="button" onClick={() => navigate("patients")}>
+          <div className="metric-icon metric-red">
+            <AlertTriangle size={21} aria-hidden="true" />
+          </div>
+          <span className="metric-label">Vyšší priorita</span>
+          <strong>{highPriority}</strong>
+          <span className="metric-caption">vyžadují pozornost</span>
+        </button>
+        <button className="metric-card" type="button" onClick={() => navigate("tasks")}>
+          <div className="metric-icon metric-violet">
+            <UsersRound size={21} aria-hidden="true" />
+          </div>
+          <span className="metric-label">MDT dnes</span>
+          <strong>1</strong>
+          <span className="metric-caption">ve 13:30</span>
+        </button>
+        <button className="metric-card" type="button" onClick={() => navigate("patients")}>
+          <div className="metric-icon metric-teal">
+            <Activity size={21} aria-hidden="true" />
+          </div>
+          <span className="metric-label">V aktivní léčbě</span>
+          <strong>{inTreatment}</strong>
+          <span className="metric-caption">probíhající léčba</span>
+        </button>
+      </div>
+
+      <div className="dashboard-grid">
+        <section className="panel patients-panel">
+          <div className="panel-header">
+            <div>
+              <h2>Naposledy aktualizovaní pacienti</h2>
+              <p>Rychlý přístup k probíhajícím epizodám péče.</p>
+            </div>
+            <button className="text-button" type="button" onClick={() => navigate("patients")}>
+              Všichni pacienti <ChevronRight size={16} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="patient-list-compact">
+            {recentPatients.map((patient) => (
+              <button
+                className="patient-compact-row"
+                key={patient.id}
+                type="button"
+                onClick={() => openPatient(patient.id)}
+              >
+                <div className="avatar">{patient.initials}</div>
+                <div className="patient-compact-main">
+                  <div className="patient-name-line">
+                    <strong>
+                      {patient.firstName} {patient.lastName}
+                    </strong>
+                    {patient.priority === "Vysoká" && <span className="priority-dot" />}
+                  </div>
+                  <span>
+                    {patient.primaryDiagnosisCode} · {patient.primaryDiagnosisLabel}
+                  </span>
+                </div>
+                <PhaseBadge phase={patient.phase} />
+                <div className="next-step-cell">
+                  <span>{patient.nextStep}</span>
+                  <strong>{formatDate(patient.nextStepDate)}</strong>
+                </div>
+                <ChevronRight className="row-chevron" size={18} aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="panel schedule-panel">
+          <div className="panel-header">
+            <div>
+              <h2>Nejbližší úkoly</h2>
+              <p>Dnešní a nadcházející termíny.</p>
+            </div>
+            <button className="icon-button" type="button" aria-label="Otevřít úkoly" onClick={() => navigate("tasks")}>
+              <ChevronRight size={18} />
+            </button>
+          </div>
+          <div className="task-stack">
+            {demoTasks.slice(0, 3).map((task) => (
+              <button className="task-card" key={task.id} type="button" onClick={() => openPatient(task.patientId)}>
+                <div className="task-date-block">
+                  <strong>{new Date(`${task.date}T12:00:00`).getDate()}</strong>
+                  <span>{formatDate(task.date, false).split(" ")[1]}</span>
+                </div>
+                <div className="task-copy">
+                  <span className={task.priority === "Vysoká" ? "task-status high" : "task-status"}>
+                    {task.status}
+                  </span>
+                  <strong>{task.title}</strong>
+                  <span>
+                    {task.time} · {task.patient}
+                  </span>
+                </div>
+                <ChevronRight size={17} aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+          <button className="button button-soft schedule-button" type="button" onClick={() => navigate("tasks")}>
+            <ListChecks size={17} aria-hidden="true" />
+            Všechny úkoly
+          </button>
+        </section>
+      </div>
+
+      <section className="panel process-panel">
+        <div className="panel-header">
+          <div>
+            <h2>Proces onkologické péče</h2>
+            <p>Příjem, histologická verifikace, staging, MDT a navazující léčebná větev.</p>
+          </div>
+          <span className="panel-meta">Aktualizováno právě teď</span>
+        </div>
+        <div className="phase-summary-grid">
+          {processSummarySteps.map((step) => {
+            const count = patients.filter((patient) => step.phases.includes(patient.phase)).length;
+            return (
+              <button
+                className="phase-summary"
+                type="button"
+                key={step.number}
+                onClick={() => navigate("patients")}
+              >
+                <span className={`phase-number phase-number-${step.number}`}>
+                  {step.number}
+                </span>
+                <div>
+                  <strong>{step.label}</strong>
+                  <span>{count} pacientů</span>
+                </div>
+                <div className="phase-bar">
+                  <span style={{ width: `${Math.max(14, (count / patients.length) * 100)}%` }} />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <div className="process-route-overview">
+          <div className="process-route-label">
+            <span>Výstup MDT</span>
+            <strong>Tři možné větve</strong>
+          </div>
+          {treatmentRoutes.map((route) => {
+            const count = patients.filter((patient) => patient.treatmentRoute === route.phase).length;
+            return (
+              <div className="process-route-card" key={route.code}>
+                <span className="route-code">{route.code}</span>
+                <div>
+                  <strong>{route.phase}</strong>
+                  <small>{route.sites}</small>
+                  {route.next && (
+                    <span className="route-next">
+                      <ArrowRight size={13} aria-hidden="true" /> {route.next}
+                    </span>
+                  )}
+                </div>
+                <b>{count}</b>
+              </div>
+            );
+          })}
+        </div>
+        <div className="process-rule-note">
+          <Microscope size={17} aria-hidden="true" />
+          <span>
+            Pokud je při příjmu doložena biopsie z externího pracoviště, druhá biopsie se
+            neplánuje a pacient pokračuje do stagingu.
+          </span>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function PatientsView({
+  patients,
+  query,
+  setQuery,
+  openPatient,
+  openNewPatient,
+}: {
+  patients: Patient[];
+  query: string;
+  setQuery: (value: string) => void;
+  openPatient: (id: string) => void;
+  openNewPatient: () => void;
+}) {
+  const filteredPatients = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase("cs-CZ");
+    if (!normalized) return patients;
+    return patients.filter((patient) =>
+      [
+        patient.firstName,
+        patient.lastName,
+        patient.primaryDiagnosisCode,
+        patient.primaryDiagnosisLabel,
+        patient.physician,
+      ]
+        .join(" ")
+        .toLocaleLowerCase("cs-CZ")
+        .includes(normalized),
+    );
+  }, [patients, query]);
+
+  return (
+    <>
+      <div className="page-heading heading-with-action">
+        <div>
+          <p className="eyebrow">Evidence pacientů</p>
+          <h1>Pacienti</h1>
+          <p>Aktivní onkologické epizody a jejich aktuální fáze.</p>
+        </div>
+        <button className="button button-primary" type="button" onClick={openNewPatient}>
+          <Plus size={18} aria-hidden="true" />
+          Přijmout pacienta do péče
+        </button>
+      </div>
+
+      <section className="panel patient-directory">
+        <div className="directory-toolbar">
+          <label className="search-field">
+            <Search size={18} aria-hidden="true" />
+            <span className="sr-only">Vyhledat pacienta</span>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Hledat podle jména, diagnózy nebo lékaře…"
+            />
+            {query && (
+              <button type="button" aria-label="Vymazat vyhledávání" onClick={() => setQuery("")}>
+                <X size={16} />
+              </button>
+            )}
+          </label>
+          <div className="directory-count">
+            <strong>{filteredPatients.length}</strong> z {patients.length} pacientů
+          </div>
+        </div>
+
+        {filteredPatients.length ? (
+          <div className="patient-table-wrap">
+            <table className="patient-table">
+              <thead>
+                <tr>
+                  <th>Pacient</th>
+                  <th>Hlavní diagnóza</th>
+                  <th>Fáze péče</th>
+                  <th>Odpovědný lékař</th>
+                  <th>Další krok</th>
+                  <th>
+                    <span className="sr-only">Akce</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPatients.map((patient) => (
+                  <tr key={patient.id} onClick={() => openPatient(patient.id)}>
+                    <td>
+                      <div className="table-patient-cell">
+                        <div className="avatar">{patient.initials}</div>
+                        <div>
+                          <strong>
+                            {patient.firstName} {patient.lastName}
+                          </strong>
+                          <span>
+                            {calculateAge(patient.dateOfBirth)} let · {patient.birthNumberMasked}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="diagnosis-cell">
+                        <strong>{patient.primaryDiagnosisCode}</strong>
+                        <span>{patient.primaryDiagnosisLabel}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <PhaseBadge phase={patient.phase} />
+                    </td>
+                    <td>{patient.physician}</td>
+                    <td>
+                      <div className="next-step-table">
+                        <span>{patient.nextStep}</span>
+                        <strong>{formatDate(patient.nextStepDate)}</strong>
+                      </div>
+                    </td>
+                    <td>
+                      <button
+                        className="icon-button table-open-button"
+                        type="button"
+                        aria-label={`Otevřít pacienta ${patient.firstName} ${patient.lastName}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openPatient(patient.id);
+                        }}
+                      >
+                        <ChevronRight size={18} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState
+            title="Žádný pacient neodpovídá filtru"
+            description="Zkuste upravit hledaný výraz nebo zobrazit celý seznam."
+            onAction={() => setQuery("")}
+          />
+        )}
+      </section>
+    </>
+  );
+}
+
+function PatientDetail({
+  patient,
+  goBack,
+  openNewEvent,
+}: {
+  patient: Patient;
+  goBack: () => void;
+  openNewEvent: () => void;
+}) {
+  return (
+    <>
+      <button className="back-button" type="button" onClick={goBack}>
+        <ArrowLeft size={17} aria-hidden="true" />
+        Zpět na seznam pacientů
+      </button>
+
+      <section className="patient-hero panel">
+        <div className="patient-hero-main">
+          <div className="avatar avatar-large">{patient.initials}</div>
+          <div>
+            <div className="patient-hero-title">
+              <h1>
+                {patient.firstName} {patient.lastName}
+              </h1>
+              <span className="demo-chip">DEMO</span>
+            </div>
+            <div className="patient-meta-line">
+              <span>{patient.birthNumberMasked}</span>
+              <span>nar. {formatLongDate(patient.dateOfBirth)}</span>
+              <span>{calculateAge(patient.dateOfBirth)} let</span>
+            </div>
+          </div>
+        </div>
+        <div className="patient-hero-actions">
+          <button className="button button-secondary" type="button">
+            <PencilLine size={17} aria-hidden="true" />
+            Upravit údaje
+          </button>
+          <button className="button button-primary" type="button" onClick={openNewEvent}>
+            <Plus size={18} aria-hidden="true" />
+            Přidat událost
+          </button>
+        </div>
+      </section>
+
+      <div className="patient-detail-grid">
+        <div className="patient-detail-main">
+          <section className="panel diagnosis-overview">
+            <div className="panel-header compact">
+              <div>
+                <p className="eyebrow">Onkologická epizoda</p>
+                <h2>Diagnóza a stav péče</h2>
+              </div>
+              <PhaseBadge phase={patient.phase} />
+            </div>
+            <div className="diagnosis-highlight">
+              <div className="diagnosis-code-large">{patient.primaryDiagnosisCode}</div>
+              <div>
+                <span>Hlavní diagnóza</span>
+                <strong>{patient.primaryDiagnosisLabel}</strong>
+                <small>{patient.diagnosisCertainty}</small>
+              </div>
+            </div>
+            <div className="episode-facts">
+              <div>
+                <span>Přijetí do péče</span>
+                <strong>{formatLongDate(patient.intakeDate)}</strong>
+              </div>
+              <div>
+                <span>Odpovědný lékař</span>
+                <strong>{patient.physician}</strong>
+              </div>
+              <div>
+                <span>Vedlejší diagnózy</span>
+                <strong>{patient.secondaryDiagnoses.join(", ") || "Bez záznamu"}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section className="panel care-pathway-panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Cesta pacienta</p>
+                <h2>Průběh podle klinického procesu</h2>
+              </div>
+              <span className="progress-value">{patient.progress} %</span>
+            </div>
+            <PatientPathway patient={patient} />
+          </section>
+
+          <section className="panel timeline-panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Chronologický záznam</p>
+                <h2>Časová osa</h2>
+              </div>
+              <button className="button button-soft" type="button" onClick={openNewEvent}>
+                <Plus size={17} aria-hidden="true" />
+                Nová událost
+              </button>
+            </div>
+            <div className="timeline">
+              {patient.events.map((event) => {
+                const Icon = eventIcons[event.kind];
+                return (
+                  <article className="timeline-event" key={event.id}>
+                    <div className={`timeline-icon timeline-${event.kind}`}>
+                      <Icon size={18} aria-hidden="true" />
+                    </div>
+                    <div className="timeline-line" />
+                    <div className="timeline-date">
+                      <strong>{formatDate(event.date)}</strong>
+                      <span>{eventKindLabels[event.kind]}</span>
+                    </div>
+                    <div className="timeline-card">
+                      <div className="timeline-card-header">
+                        <h3>{event.title}</h3>
+                        <span className={`event-status status-${event.status.replaceAll(" ", "-").toLowerCase()}`}>
+                          {event.status}
+                        </span>
+                      </div>
+                      <p>{event.description}</p>
+                      <span className="timeline-author">Zapsal/a: {event.author}</span>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+
+        <aside className="patient-detail-aside">
+          <section className="panel next-action-card">
+            <div className="next-action-icon">
+              <CalendarDays size={21} aria-hidden="true" />
+            </div>
+            <p>Nejbližší krok</p>
+            <h2>{patient.nextStep}</h2>
+            <strong>{formatLongDate(patient.nextStepDate)}</strong>
+            <button className="button button-primary full-width" type="button">
+              Zobrazit detail termínu
+            </button>
+          </section>
+
+          <section className="panel info-card">
+            <div className="panel-header compact">
+              <h2>Kontrolní body</h2>
+            </div>
+            <div className="checklist">
+              <div className="checklist-row done">
+                <CircleCheck size={18} aria-hidden="true" />
+                <span>Identifikace ověřena</span>
+              </div>
+              <div className="checklist-row done">
+                <CircleCheck size={18} aria-hidden="true" />
+                <span>Hlavní diagnóza zadána</span>
+              </div>
+              <div className="checklist-row done">
+                <CircleCheck size={18} aria-hidden="true" />
+                <span>Odpovědný lékař určen</span>
+              </div>
+              <div className="checklist-row">
+                <Clock3 size={18} aria-hidden="true" />
+                <span>Dokončení aktuální fáze</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="panel privacy-card">
+            <LockKeyhole size={20} aria-hidden="true" />
+            <div>
+              <strong>Koncept zabezpečeného přístupu</strong>
+              <span>Každé zobrazení by v produkci vytvořilo auditní záznam.</span>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </>
+  );
+}
+
+function TasksView({ openPatient }: { openPatient: (id: string) => void }) {
+  return (
+    <>
+      <div className="page-heading heading-with-action">
+        <div>
+          <p className="eyebrow">Koordinace péče</p>
+          <h1>Úkoly a termíny</h1>
+          <p>Plánované kroky napříč aktivními onkologickými epizodami.</p>
+        </div>
+        <button className="button button-primary" type="button">
+          <Plus size={18} aria-hidden="true" />
+          Nový úkol
+        </button>
+      </div>
+
+      <div className="task-metrics">
+        <div className="task-metric">
+          <span>Dnes</span>
+          <strong>1</strong>
+        </div>
+        <div className="task-metric">
+          <span>Tento týden</span>
+          <strong>4</strong>
+        </div>
+        <div className="task-metric warning">
+          <span>Vyšší priorita</span>
+          <strong>2</strong>
+        </div>
+      </div>
+
+      <section className="panel tasks-directory">
+        <div className="panel-header">
+          <div>
+            <h2>Nadcházející</h2>
+            <p>Seřazeno podle nejbližšího termínu.</p>
+          </div>
+        </div>
+        <div className="large-task-list">
+          {demoTasks.map((task) => (
+            <button className="large-task-row" key={task.id} type="button" onClick={() => openPatient(task.patientId)}>
+              <div className="large-task-date">
+                <CalendarDays size={19} aria-hidden="true" />
+                <div>
+                  <strong>{formatLongDate(task.date)}</strong>
+                  <span>{task.time}</span>
+                </div>
+              </div>
+              <div className="large-task-main">
+                <span className={task.priority === "Vysoká" ? "task-status high" : "task-status"}>
+                  {task.status}
+                </span>
+                <strong>{task.title}</strong>
+                <span>{task.patient}</span>
+              </div>
+              <div className="task-assignee">
+                <div className="avatar avatar-tiny">AD</div>
+                <span>Onkogynekologický tým</span>
+              </div>
+              <ChevronRight size={18} aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function AuditView() {
+  return (
+    <>
+      <div className="page-heading">
+        <p className="eyebrow">Bezpečnost a dohledatelnost</p>
+        <h1>Auditní stopa</h1>
+        <p>Ukázka evidence přístupů a změn. V mockupu se nové záznamy neukládají.</p>
+      </div>
+
+      <section className="panel audit-intro">
+        <div className="audit-intro-icon">
+          <ShieldCheck size={25} aria-hidden="true" />
+        </div>
+        <div>
+          <h2>Každá práce se záznamem musí být dohledatelná</h2>
+          <p>
+            Produkční systém by evidoval uživatele, čas, akci, dotčený záznam, účel přístupu
+            a technický kontext bez ukládání citlivého obsahu do logu.
+          </p>
+        </div>
+      </section>
+
+      <section className="panel audit-panel">
+        <div className="panel-header">
+          <div>
+            <h2>Poslední aktivita</h2>
+            <p>Fiktivní data pro prezentaci rozhraní.</p>
+          </div>
+          <span className="demo-chip">DEMO LOG</span>
+        </div>
+        <div className="audit-list">
+          {demoAuditEvents.map((event) => (
+            <div className="audit-row" key={event.id}>
+              <div className={`audit-action-icon ${event.category === "Změna" ? "change" : "read"}`}>
+                {event.category === "Změna" ? <PencilLine size={17} /> : <Eye size={17} />}
+              </div>
+              <div className="audit-time">
+                <strong>{event.time.split(", ")[1]}</strong>
+                <span>{event.time.split(", ")[0]}</span>
+              </div>
+              <div className="audit-main">
+                <strong>{event.action}</strong>
+                <span>{event.patient}</span>
+              </div>
+              <div className="audit-user">
+                <span>{event.user}</span>
+                <small>{event.category}</small>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function NewPatientModal({
+  onClose,
+  onCreate,
+}: {
+  onClose: () => void;
+  onCreate: (patient: Patient) => void;
+}) {
+  const [birthNumber, setBirthNumber] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [intakeDate, setIntakeDate] = useState("2026-09-01");
+  const [primaryDiagnosis, setPrimaryDiagnosis] = useState("C54.1");
+  const [certainty, setCertainty] = useState<Patient["diagnosisCertainty"]>("Suspektní");
+  const [biopsyStatus, setBiopsyStatus] = useState<BiopsyStatus>("Nutno provést");
+  const [secondaryDiagnoses, setSecondaryDiagnoses] = useState<string[]>([]);
+  const [secondarySelection, setSecondarySelection] = useState("");
+  const [formError, setFormError] = useState("");
+
+  const birthNumberResult = useMemo(() => parseBirthNumber(birthNumber), [birthNumber]);
+  const selectedDiagnosis =
+    diagnoses.find((diagnosis) => diagnosis.code === primaryDiagnosis) ?? diagnoses[0];
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  const fillDemo = () => {
+    setBirthNumber("905101/9999");
+    setFirstName("Nová");
+    setLastName("Testovací");
+    setPrimaryDiagnosis("C54.1");
+    setCertainty("Předběžně potvrzená");
+    setBiopsyStatus("Provedena externě");
+    setFormError("");
+  };
+
+  const addSecondaryDiagnosis = () => {
+    if (!secondarySelection || secondaryDiagnoses.includes(secondarySelection)) return;
+    setSecondaryDiagnoses((current) => [...current, secondarySelection]);
+    setSecondarySelection("");
+  };
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!birthNumberResult.date || birthNumberResult.error) {
+      setFormError("Zkontrolujte rodné číslo a odvozené datum narození.");
+      return;
+    }
+    if (!firstName.trim() || !lastName.trim()) {
+      setFormError("Vyplňte jméno a příjmení.");
+      return;
+    }
+
+    const id = `demo-${Date.now()}`;
+    const biopsyAlreadyCompleted = biopsyStatus !== "Nutno provést";
+    const intakeEvent: TimelineEvent = {
+      id: `event-${Date.now()}-intake`,
+      kind: "intake",
+      date: intakeDate,
+      title: "Přijetí pacienta do péče",
+      description: `Hlavní diagnóza ${selectedDiagnosis.code} – ${selectedDiagnosis.label}.`,
+      author: "Andrej Demo",
+      status: "Dokončeno",
+    };
+    const events: TimelineEvent[] = biopsyAlreadyCompleted
+      ? [
+          {
+            id: `event-${Date.now()}-biopsy`,
+            kind: "pathology",
+            date: intakeDate,
+            title: "Biopsie doložena při příjmu",
+            description: `${biopsyStatus}. Druhá biopsie se neplánuje; další krok je staging.`,
+            author: "Andrej Demo",
+            status: "Dokončeno",
+          },
+          intakeEvent,
+        ]
+      : [intakeEvent];
+
+    const patient: Patient = {
+      id,
+      initials: `${firstName.trim()[0]}${lastName.trim()[0]}`.toLocaleUpperCase("cs-CZ"),
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      birthNumberMasked: maskBirthNumber(birthNumber),
+      dateOfBirth: birthNumberResult.date,
+      primaryDiagnosisCode: selectedDiagnosis.code,
+      primaryDiagnosisLabel: selectedDiagnosis.label,
+      secondaryDiagnoses,
+      diagnosisCertainty: certainty,
+      intakeDate,
+      biopsyStatus,
+      mdtDate: null,
+      treatmentRoute: null,
+      treatmentSite: null,
+      recurrence: false,
+      phase: biopsyAlreadyCompleted ? "Staging" : "Biopsie",
+      progress: biopsyAlreadyCompleted ? 40 : 20,
+      physician: "Andrej Demo",
+      nextStep: biopsyAlreadyCompleted ? "Naplánovat staging" : "Naplánovat biopsii",
+      nextStepDate: "2026-09-08",
+      priority: "Běžná",
+      events,
+    };
+    onCreate(patient);
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="new-patient-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="modal-header">
+          <div>
+            <p className="eyebrow">Nová onkologická epizoda</p>
+            <h2 id="new-patient-title">Přijetí pacienta do péče</h2>
+          </div>
+          <button className="icon-button" type="button" aria-label="Zavřít" onClick={onClose}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="modal-demo-note">
+          <LockKeyhole size={17} aria-hidden="true" />
+          <span>Demo formulář — nevkládejte skutečné identifikační ani zdravotní údaje.</span>
+          <button type="button" onClick={fillDemo}>
+            Vyplnit testovací údaje
+          </button>
+        </div>
+
+        <form onSubmit={submit}>
+          <div className="form-section">
+            <div className="form-section-heading">
+              <span>1</span>
+              <div>
+                <h3>Identifikace pacienta</h3>
+                <p>Datum narození se odvodí z rodného čísla.</p>
+              </div>
+            </div>
+            <div className="form-grid two-columns">
+              <label className="form-field">
+                <span>Rodné číslo *</span>
+                <input
+                  value={birthNumber}
+                  onChange={(event) => setBirthNumber(event.target.value)}
+                  placeholder="RRMMDD/XXXX"
+                  inputMode="numeric"
+                  autoFocus
+                />
+                {birthNumberResult.error && <small className="field-error">{birthNumberResult.error}</small>}
+                {!birthNumberResult.error && birthNumberResult.checksumValid === false && (
+                  <small className="field-warning">
+                    Kontrolní součet neodpovídá — v demo režimu lze pokračovat.
+                  </small>
+                )}
+              </label>
+              <label className="form-field">
+                <span>Datum narození</span>
+                <div className={`derived-field ${birthNumberResult.date ? "has-value" : ""}`}>
+                  <CalendarDays size={17} aria-hidden="true" />
+                  {birthNumberResult.date ? formatLongDate(birthNumberResult.date) : "Doplní se automaticky"}
+                </div>
+              </label>
+              <label className="form-field">
+                <span>Jméno *</span>
+                <input value={firstName} onChange={(event) => setFirstName(event.target.value)} placeholder="Jméno" />
+              </label>
+              <label className="form-field">
+                <span>Příjmení *</span>
+                <input value={lastName} onChange={(event) => setLastName(event.target.value)} placeholder="Příjmení" />
+              </label>
+            </div>
+          </div>
+
+          <div className="form-section">
+            <div className="form-section-heading">
+              <span>2</span>
+              <div>
+                <h3>Přijetí a diagnóza</h3>
+                <p>Jedna hlavní a volitelné vedlejší diagnózy.</p>
+              </div>
+            </div>
+            <div className="form-grid two-columns">
+              <label className="form-field">
+                <span>Datum přijetí *</span>
+                <input type="date" value={intakeDate} onChange={(event) => setIntakeDate(event.target.value)} />
+              </label>
+              <label className="form-field">
+                <span>Stav diagnózy</span>
+                <select value={certainty} onChange={(event) => setCertainty(event.target.value as Patient["diagnosisCertainty"])}>
+                  <option>Suspektní</option>
+                  <option>Předběžně potvrzená</option>
+                  <option>Histologicky potvrzená</option>
+                </select>
+              </label>
+              <label className="form-field full-column">
+                <span>Hlavní diagnóza MKN-10 *</span>
+                <select value={primaryDiagnosis} onChange={(event) => setPrimaryDiagnosis(event.target.value)}>
+                  {diagnoses.map((diagnosis) => (
+                    <option key={diagnosis.code} value={diagnosis.code}>
+                      {diagnosis.code} — {diagnosis.label}
+                    </option>
+                  ))}
+                </select>
+                <small>Mockup obsahuje zkrácený výběr onkogynekologických diagnóz.</small>
+              </label>
+              <div className="form-field full-column">
+                <span>Vedlejší diagnózy</span>
+                <div className="secondary-diagnosis-add">
+                  <select value={secondarySelection} onChange={(event) => setSecondarySelection(event.target.value)}>
+                    <option value="">Vyberte další diagnózu…</option>
+                    {diagnoses
+                      .filter((diagnosis) => diagnosis.code !== primaryDiagnosis)
+                      .map((diagnosis) => (
+                        <option key={diagnosis.code} value={diagnosis.code}>
+                          {diagnosis.code} — {diagnosis.label}
+                        </option>
+                      ))}
+                  </select>
+                  <button className="button button-secondary" type="button" onClick={addSecondaryDiagnosis}>
+                    Přidat
+                  </button>
+                </div>
+                {secondaryDiagnoses.length > 0 && (
+                  <div className="diagnosis-tags">
+                    {secondaryDiagnoses.map((code) => (
+                      <span key={code}>
+                        {code}
+                        <button
+                          type="button"
+                          aria-label={`Odebrat diagnózu ${code}`}
+                          onClick={() => setSecondaryDiagnoses((current) => current.filter((item) => item !== code))}
+                        >
+                          <X size={13} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <fieldset className="biopsy-choice full-column">
+                <legend>Stav biopsie při přijetí</legend>
+                <p>
+                  Doložená biopsie se neopakuje. Pacient je zařazen přímo do stagingu a
+                  původ materiálu zůstává evidován.
+                </p>
+                <div className="biopsy-choice-grid">
+                  {(
+                    [
+                      {
+                        value: "Nutno provést",
+                        title: "Biopsie dosud není",
+                        description: "Další krok: provést biopsii",
+                      },
+                      {
+                        value: "Provedena v ÚVN",
+                        title: "Provedena v ÚVN",
+                        description: "Pokračovat do stagingu",
+                      },
+                      {
+                        value: "Provedena externě",
+                        title: "Provedena externě",
+                        description: "Přeskočit druhou biopsii",
+                      },
+                    ] as const
+                  ).map((option) => (
+                    <label
+                      className={`biopsy-option ${biopsyStatus === option.value ? "selected" : ""}`}
+                      key={option.value}
+                    >
+                      <input
+                        type="radio"
+                        name="biopsy-status"
+                        value={option.value}
+                        checked={biopsyStatus === option.value}
+                        onChange={() => setBiopsyStatus(option.value)}
+                      />
+                      <span>
+                        <strong>{option.title}</strong>
+                        <small>{option.description}</small>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            </div>
+          </div>
+
+          {formError && (
+            <div className="form-error" role="alert">
+              <AlertTriangle size={17} aria-hidden="true" />
+              {formError}
+            </div>
+          )}
+
+          <div className="modal-footer">
+            <button className="button button-secondary" type="button" onClick={onClose}>
+              Zrušit
+            </button>
+            <button className="button button-primary" type="submit">
+              <FileCheck2 size={18} aria-hidden="true" />
+              Přijmout do péče
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function NewEventModal({
+  patient,
+  onClose,
+  onCreate,
+}: {
+  patient: Patient;
+  onClose: () => void;
+  onCreate: (event: TimelineEvent) => void;
+}) {
+  const [kind, setKind] = useState<EventKind>("imaging");
+  const [date, setDate] = useState("2026-09-01");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [status, setStatus] = useState<TimelineEvent["status"]>("Naplánováno");
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!title.trim()) return;
+    onCreate({
+      id: `event-${Date.now()}`,
+      kind,
+      date,
+      title: title.trim(),
+      description: description.trim() || "Bez doplňující poznámky.",
+      author: "Andrej Demo",
+      status,
+    });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="modal modal-small"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="new-event-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="modal-header">
+          <div>
+            <p className="eyebrow">{patient.firstName} {patient.lastName}</p>
+            <h2 id="new-event-title">Nová událost</h2>
+          </div>
+          <button className="icon-button" type="button" aria-label="Zavřít" onClick={onClose}>
+            <X size={20} />
+          </button>
+        </div>
+        <form onSubmit={submit}>
+          <div className="form-grid two-columns compact-form">
+            <label className="form-field">
+              <span>Typ události</span>
+              <select value={kind} onChange={(event) => setKind(event.target.value as EventKind)}>
+                {Object.entries(eventKindLabels).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="form-field">
+              <span>Datum</span>
+              <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+            </label>
+            <label className="form-field full-column">
+              <span>Název *</span>
+              <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Např. CT staging" autoFocus />
+            </label>
+            <label className="form-field full-column">
+              <span>Poznámka</span>
+              <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} placeholder="Stručný popis události…" />
+            </label>
+            <label className="form-field full-column">
+              <span>Stav</span>
+              <select value={status} onChange={(event) => setStatus(event.target.value as TimelineEvent["status"])}>
+                <option>Naplánováno</option>
+                <option>Dokončeno</option>
+                <option>Čeká na výsledek</option>
+              </select>
+            </label>
+          </div>
+          <div className="modal-footer">
+            <button className="button button-secondary" type="button" onClick={onClose}>Zrušit</button>
+            <button className="button button-primary" type="submit">
+              <Plus size={17} aria-hidden="true" /> Přidat událost
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
