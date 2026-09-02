@@ -31,13 +31,14 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   BiopsyStatus,
   CarePhase,
   EventKind,
   Patient,
   TimelineEvent,
+  TreatmentRoute,
   demoAuditEvents,
   demoTasks,
   diagnoses,
@@ -46,6 +47,11 @@ import {
   processSummarySteps,
   treatmentRoutes,
 } from "@/lib/mock-data";
+import {
+  advancePatientThroughWorkflow,
+  getWorkflowAdvanceAction,
+} from "@/lib/workflow";
+import type { CompletedBiopsyStatus, WorkflowAdvanceInput } from "@/lib/workflow";
 
 type View = "dashboard" | "patients" | "patient" | "tasks" | "audit";
 
@@ -314,6 +320,7 @@ export function OncologyRegistry() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isNewPatientOpen, setIsNewPatientOpen] = useState(false);
   const [isNewEventOpen, setIsNewEventOpen] = useState(false);
+  const [isAdvancePhaseOpen, setIsAdvancePhaseOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toast, setToast] = useState("");
 
@@ -372,6 +379,23 @@ export function OncologyRegistry() {
     );
     setIsNewEventOpen(false);
     setToast("Nová událost byla přidána do časové osy.");
+  };
+
+  const advancePatient = (input: WorkflowAdvanceInput) => {
+    if (!selectedPatient) return;
+    const updatedPatient = advancePatientThroughWorkflow(selectedPatient, input);
+    if (!updatedPatient) {
+      setToast("Pro posun pacienta je potřeba doplnit povinné údaje.");
+      return;
+    }
+
+    setPatients((current) =>
+      current.map((patient) =>
+        patient.id === selectedPatient.id ? updatedPatient : patient,
+      ),
+    );
+    setIsAdvancePhaseOpen(false);
+    setToast(`Pacient byl posunut do fáze ${updatedPatient.phase}.`);
   };
 
   return (
@@ -498,6 +522,7 @@ export function OncologyRegistry() {
               patient={selectedPatient}
               goBack={() => navigate("patients")}
               openNewEvent={() => setIsNewEventOpen(true)}
+              openAdvancePhase={() => setIsAdvancePhaseOpen(true)}
             />
           )}
           {activeView === "tasks" && <TasksView openPatient={openPatient} />}
@@ -540,6 +565,14 @@ export function OncologyRegistry() {
           patient={selectedPatient}
           onClose={() => setIsNewEventOpen(false)}
           onCreate={addEvent}
+        />
+      )}
+
+      {isAdvancePhaseOpen && selectedPatient && (
+        <AdvancePatientModal
+          patient={selectedPatient}
+          onClose={() => setIsAdvancePhaseOpen(false)}
+          onAdvance={advancePatient}
         />
       )}
 
@@ -950,11 +983,15 @@ function PatientDetail({
   patient,
   goBack,
   openNewEvent,
+  openAdvancePhase,
 }: {
   patient: Patient;
   goBack: () => void;
   openNewEvent: () => void;
+  openAdvancePhase: () => void;
 }) {
+  const advanceAction = getWorkflowAdvanceAction(patient);
+
   return (
     <>
       <button className="back-button" type="button" onClick={goBack}>
@@ -995,11 +1032,21 @@ function PatientDetail({
         <span className="mobile-next-action-icon">
           <CalendarDays size={20} aria-hidden="true" />
         </span>
-        <div>
+        <div className="mobile-next-action-copy">
           <span>Nejbližší krok</span>
           <strong>{patient.nextStep}</strong>
           <time dateTime={patient.nextStepDate}>{formatLongDate(patient.nextStepDate)}</time>
         </div>
+        {advanceAction ? (
+          <button
+            className="button button-primary mobile-advance-button"
+            type="button"
+            onClick={openAdvancePhase}
+          >
+            {advanceAction.label}
+            <ArrowRight size={17} aria-hidden="true" />
+          </button>
+        ) : null}
       </section>
 
       <div className="patient-detail-grid">
@@ -1125,9 +1172,25 @@ function PatientDetail({
             <p>Nejbližší krok</p>
             <h2>{patient.nextStep}</h2>
             <strong>{formatLongDate(patient.nextStepDate)}</strong>
-            <button className="button button-primary full-width" type="button">
-              Zobrazit detail termínu
-            </button>
+            {advanceAction ? (
+              <button
+                className="button button-primary full-width next-phase-button"
+                type="button"
+                onClick={openAdvancePhase}
+              >
+                {advanceAction.label}
+                <ArrowRight size={16} aria-hidden="true" />
+              </button>
+            ) : (
+              <button
+                className="button button-secondary full-width"
+                type="button"
+                onClick={openNewEvent}
+              >
+                <Plus size={16} aria-hidden="true" />
+                Přidat událost
+              </button>
+            )}
           </section>
 
           <section className="panel info-card">
@@ -1689,6 +1752,306 @@ function NewPatientModal({
             <button className="button button-primary" type="submit">
               <FileCheck2 size={18} aria-hidden="true" />
               Přijmout do péče
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function AdvancePatientModal({
+  patient,
+  onClose,
+  onAdvance,
+}: {
+  patient: Patient;
+  onClose: () => void;
+  onAdvance: (input: WorkflowAdvanceInput) => void;
+}) {
+  const action = getWorkflowAdvanceAction(patient);
+  const dialogRef = useRef<HTMLElement>(null);
+  const [date, setDate] = useState("2026-09-02");
+  const [note, setNote] = useState("");
+  const [biopsyStatus, setBiopsyStatus] = useState<CompletedBiopsyStatus | null>(null);
+  const [externalBiopsyDate, setExternalBiopsyDate] = useState("2026-09-02");
+  const [externalBiopsyFacility, setExternalBiopsyFacility] = useState("");
+  const [externalBiopsyReference, setExternalBiopsyReference] = useState("");
+  const [externalBiopsyConclusion, setExternalBiopsyConclusion] = useState("");
+  const [treatmentRoute, setTreatmentRoute] = useState<TreatmentRoute | null>(null);
+  const [formError, setFormError] = useState("");
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement;
+    dialogRef.current?.focus();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape);
+      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
+    };
+  }, [onClose]);
+
+  if (!action) return null;
+
+  const targetLabel = treatmentRoute ?? action.targetLabel;
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!date) {
+      setFormError("Doplňte datum dokončení aktuální fáze.");
+      return;
+    }
+    if (patient.phase === "Biopsie" && !biopsyStatus) {
+      setFormError("Vyberte, kde byla biopsie provedena.");
+      return;
+    }
+    if (
+      patient.phase === "Biopsie" &&
+      biopsyStatus === "Provedena externě" &&
+      (!externalBiopsyDate ||
+        !externalBiopsyFacility.trim() ||
+        !externalBiopsyConclusion.trim())
+    ) {
+      setFormError(
+        "U externí biopsie vyplňte datum, pracoviště a závěr histologického nálezu.",
+      );
+      return;
+    }
+    if (patient.phase === "MDT" && !treatmentRoute) {
+      setFormError("Vyberte léčebnou větev doporučenou MDT.");
+      return;
+    }
+
+    onAdvance({
+      date,
+      note,
+      biopsyStatus,
+      externalBiopsy:
+        biopsyStatus === "Provedena externě"
+          ? {
+              date: externalBiopsyDate,
+              facility: externalBiopsyFacility.trim(),
+              reportReference: externalBiopsyReference.trim(),
+              conclusion: externalBiopsyConclusion.trim(),
+            }
+          : null,
+      treatmentRoute,
+    });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="modal modal-small advance-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="advance-patient-title"
+        aria-describedby="advance-patient-description"
+        ref={dialogRef}
+        tabIndex={-1}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="modal-header">
+          <div>
+            <p className="eyebrow">
+              {patient.firstName} {patient.lastName}
+            </p>
+            <h2 id="advance-patient-title">Posunout v procesu</h2>
+          </div>
+          <button className="icon-button" type="button" aria-label="Zavřít" onClick={onClose}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={submit}>
+          <div className="advance-summary" id="advance-patient-description">
+            <div className="advance-summary-step">
+              <span>Aktuální fáze</span>
+              <PhaseBadge phase={patient.phase} />
+            </div>
+            <span className="advance-summary-arrow" aria-hidden="true">
+              <ArrowRight size={20} />
+            </span>
+            <div className="advance-summary-step advance-summary-target" aria-live="polite">
+              <span>Po potvrzení</span>
+              <strong>{targetLabel}</strong>
+            </div>
+          </div>
+          <p className="advance-description">{action.description}</p>
+
+          {patient.phase === "Biopsie" ? (
+            <fieldset className="biopsy-choice advance-choice">
+              <legend>Dokončená biopsie *</legend>
+              <p>Vyberte původ histologického výsledku, který posun do stagingu dokládá.</p>
+              <div className="biopsy-choice-grid two-options">
+                {(
+                  [
+                    {
+                      value: "Provedena v ÚVN",
+                      title: "Provedena v ÚVN",
+                      description: "Výsledek z místního pracoviště",
+                    },
+                    {
+                      value: "Provedena externě",
+                      title: "Provedena externě",
+                      description: "Doložit externí histologický nález",
+                    },
+                  ] as const
+                ).map((option) => (
+                  <label
+                    className={`biopsy-option ${biopsyStatus === option.value ? "selected" : ""}`}
+                    key={option.value}
+                  >
+                    <input
+                      type="radio"
+                      name="advance-biopsy-status"
+                      value={option.value}
+                      checked={biopsyStatus === option.value}
+                      onChange={() => {
+                        setBiopsyStatus(option.value);
+                        setFormError("");
+                      }}
+                    />
+                    <span>
+                      <strong>{option.title}</strong>
+                      <small>{option.description}</small>
+                    </span>
+                  </label>
+                ))}
+              </div>
+
+              {biopsyStatus === "Provedena externě" ? (
+                <div className="external-biopsy-fields" aria-live="polite">
+                  <div className="external-biopsy-heading">
+                    <div>
+                      <strong>Výsledek externí biopsie</strong>
+                      <small>Reference nálezu je volitelná.</small>
+                    </div>
+                    <Microscope size={19} aria-hidden="true" />
+                  </div>
+                  <div className="form-grid two-columns">
+                    <label className="form-field">
+                      <span>Datum odběru / výkonu *</span>
+                      <input
+                        type="date"
+                        value={externalBiopsyDate}
+                        onChange={(event) => setExternalBiopsyDate(event.target.value)}
+                        required
+                      />
+                    </label>
+                    <label className="form-field">
+                      <span>Externí pracoviště *</span>
+                      <input
+                        value={externalBiopsyFacility}
+                        onChange={(event) => setExternalBiopsyFacility(event.target.value)}
+                        placeholder="Např. Nemocnice Demo"
+                        required
+                      />
+                    </label>
+                    <label className="form-field full-column">
+                      <span>Reference nálezu</span>
+                      <input
+                        value={externalBiopsyReference}
+                        onChange={(event) => setExternalBiopsyReference(event.target.value)}
+                        placeholder="Číslo biopsie / histologického nálezu"
+                      />
+                    </label>
+                    <label className="form-field full-column">
+                      <span>Závěr histologického nálezu *</span>
+                      <textarea
+                        value={externalBiopsyConclusion}
+                        onChange={(event) => setExternalBiopsyConclusion(event.target.value)}
+                        rows={4}
+                        placeholder="Stručný závěr externího histologického nálezu…"
+                        required
+                      />
+                    </label>
+                  </div>
+                </div>
+              ) : null}
+            </fieldset>
+          ) : null}
+
+          {patient.phase === "MDT" ? (
+            <fieldset className="route-choice advance-choice">
+              <legend>Léčebná větev doporučená MDT *</legend>
+              <p>Volba nastaví další fázi i nejbližší klinický krok.</p>
+              <div className="route-choice-grid">
+                {treatmentRoutes.map((route) => (
+                  <label
+                    className={`route-choice-option ${
+                      treatmentRoute === route.phase ? "selected" : ""
+                    }`}
+                    key={route.code}
+                  >
+                    <input
+                      type="radio"
+                      name="treatment-route"
+                      value={route.phase}
+                      checked={treatmentRoute === route.phase}
+                      onChange={() => {
+                        setTreatmentRoute(route.phase);
+                        setFormError("");
+                      }}
+                    />
+                    <span className="route-code">{route.code}</span>
+                    <span className="route-choice-copy">
+                      <strong>{route.phase}</strong>
+                      <small>{route.sites}</small>
+                      {route.next ? <em>{route.next}</em> : null}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
+
+          <div className="form-grid two-columns compact-form advance-details">
+            <label className="form-field">
+              <span>Datum dokončení fáze *</span>
+              <input
+                type="date"
+                value={date}
+                onChange={(event) => {
+                  setDate(event.target.value);
+                  setFormError("");
+                }}
+                required
+                autoFocus={patient.phase !== "Biopsie" && patient.phase !== "MDT"}
+              />
+            </label>
+            <div className="advance-audit-note">
+              <History size={18} aria-hidden="true" />
+              <span>Posun se automaticky zapíše do časové osy.</span>
+            </div>
+            <label className="form-field full-column">
+              <span>Poznámka</span>
+              <textarea
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                rows={3}
+                placeholder="Volitelné upřesnění rozhodnutí nebo výsledku…"
+              />
+            </label>
+          </div>
+
+          {formError ? (
+            <div className="form-error" role="alert">
+              <AlertTriangle size={17} aria-hidden="true" />
+              {formError}
+            </div>
+          ) : null}
+
+          <div className="modal-footer">
+            <button className="button button-secondary" type="button" onClick={onClose}>
+              Zrušit
+            </button>
+            <button className="button button-primary" type="submit">
+              <ArrowRight size={17} aria-hidden="true" />
+              Potvrdit posun
             </button>
           </div>
         </form>
