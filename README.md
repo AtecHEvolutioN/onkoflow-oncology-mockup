@@ -12,7 +12,9 @@ Interactive Czech-language mockup for tracking patients through an oncologic car
 - the clinical pathway **Příjem → Biopsie → Staging → MDT**, followed by primary surgery, neoadjuvant treatment with subsequent surgery, or palliation;
 - guided one-action phase transitions that update the patient state, next task, progress, and clinical timeline together;
 - biopsy-origin recording so a biopsy already completed at ÚVN or externally is not repeated;
-- structured capture of an external biopsy result (date, facility, report reference, and conclusion), plus a separate recurrence state.
+- structured biopsy results from ÚVN or an external facility (date, workplace, report reference, and conclusion);
+- a selectable staging checklist with custom examinations, plus a separate recurrence state;
+- patient-scoped creation of planned events that also appear in **Úkoly a termíny**.
 
 ## Important
 

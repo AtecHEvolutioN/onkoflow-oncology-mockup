@@ -19,7 +19,8 @@ export type WorkflowAdvanceInput = {
   date: string;
   note: string;
   biopsyStatus: CompletedBiopsyStatus | null;
-  externalBiopsy: Patient["externalBiopsy"];
+  biopsyResult: Patient["biopsyResult"];
+  stagingExaminations: string[];
   treatmentRoute: TreatmentRoute | null;
 };
 
@@ -35,7 +36,8 @@ type WorkflowTransitionPlan = {
     Pick<
       Patient,
       | "biopsyStatus"
-      | "externalBiopsy"
+      | "biopsyResult"
+      | "stagingExaminations"
       | "diagnosisCertainty"
       | "mdtDate"
       | "treatmentRoute"
@@ -138,10 +140,9 @@ function getWorkflowTransitionPlan(
       if (!input.biopsyStatus) return null;
       const external = input.biopsyStatus === "Provedena externě";
       if (
-        external &&
-        (!input.externalBiopsy?.date ||
-          !input.externalBiopsy.facility.trim() ||
-          !input.externalBiopsy.conclusion.trim())
+        !input.biopsyResult?.date ||
+        !input.biopsyResult.facility.trim() ||
+        !input.biopsyResult.conclusion.trim()
       ) {
         return null;
       }
@@ -152,21 +153,23 @@ function getWorkflowTransitionPlan(
         nextStepDelayDays: 7,
         eventKind: "pathology",
         eventTitle: external ? "Externí biopsie doložena" : "Biopsie dokončena v ÚVN",
-        eventDescription: external
-          ? `${input.externalBiopsy?.facility}: ${input.externalBiopsy?.conclusion}${
-              input.externalBiopsy?.reportReference
-                ? ` Reference nálezu: ${input.externalBiopsy.reportReference}.`
-                : ""
-            } Pacient pokračuje do stagingu.`
-          : "Biopsie byla provedena v ÚVN a histologická verifikace byla dokončena. Pacient pokračuje do stagingu.",
+        eventDescription: `${input.biopsyResult.facility}: ${input.biopsyResult.conclusion}${
+          input.biopsyResult.reportReference
+            ? ` Reference nálezu: ${input.biopsyResult.reportReference}.`
+            : ""
+        } Pacient pokračuje do stagingu.`,
         changes: {
           biopsyStatus: input.biopsyStatus,
-          externalBiopsy: external ? input.externalBiopsy : null,
+          biopsyResult: input.biopsyResult,
           diagnosisCertainty: "Histologicky potvrzená",
         },
       };
     }
-    case "Staging":
+    case "Staging": {
+      const examinations = Array.from(
+        new Set(input.stagingExaminations.map((item) => item.trim()).filter(Boolean)),
+      );
+      if (examinations.length === 0) return null;
       return {
         nextPhase: "MDT",
         progress: 65,
@@ -174,9 +177,14 @@ function getWorkflowTransitionPlan(
         nextStepDelayDays: 7,
         eventKind: "imaging",
         eventTitle: "Staging dokončen",
-        eventDescription:
-          "Stagingová vyšetření byla uzavřena. Případ je připraven k prezentaci na MDT.",
+        eventDescription: `Stagingová vyšetření byla uzavřena: ${examinations.join(
+          ", ",
+        )}. Případ je připraven k prezentaci na MDT.`,
+        changes: {
+          stagingExaminations: examinations,
+        },
       };
+    }
     case "MDT": {
       if (!input.treatmentRoute) return null;
       const routeDetails: Record<
@@ -249,6 +257,7 @@ function getWorkflowTransitionPlan(
         eventDescription:
           "Byl zahájen nový stagingový cyklus pro posouzení recidivy a další rozhodnutí MDT.",
         changes: {
+          stagingExaminations: [],
           mdtDate: null,
           treatmentRoute: null,
           treatmentSite: null,
@@ -267,10 +276,8 @@ export function advancePatientThroughWorkflow(patient: Patient, input: WorkflowA
 
   const note = input.note.trim();
   const eventDate =
-    patient.phase === "Biopsie" &&
-    input.biopsyStatus === "Provedena externě" &&
-    input.externalBiopsy
-      ? input.externalBiopsy.date
+    patient.phase === "Biopsie" && input.biopsyResult
+      ? input.biopsyResult.date
       : input.date;
   const event: TimelineEvent = {
     id: `event-${Date.now()}-transition`,

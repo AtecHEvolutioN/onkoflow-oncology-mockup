@@ -18,7 +18,7 @@ export type BiopsyStatus =
 
 export type TreatmentSite = "ÚVN" | "Motol" | "Externí";
 
-export type ExternalBiopsyResult = {
+export type BiopsyResult = {
   date: string;
   facility: string;
   reportReference: string;
@@ -39,10 +39,22 @@ export type TimelineEvent = {
   id: string;
   kind: EventKind;
   date: string;
+  time?: string;
   title: string;
   description: string;
   author: string;
   status: "Dokončeno" | "Naplánováno" | "Čeká na výsledek";
+};
+
+export type CareTask = {
+  id: string;
+  patientId: string;
+  patient: string;
+  title: string;
+  date: string;
+  time: string;
+  status: string;
+  priority: "Běžná" | "Vysoká";
 };
 
 export type Patient = {
@@ -58,7 +70,8 @@ export type Patient = {
   diagnosisCertainty: "Suspektní" | "Předběžně potvrzená" | "Histologicky potvrzená";
   intakeDate: string;
   biopsyStatus: BiopsyStatus;
-  externalBiopsy: ExternalBiopsyResult | null;
+  biopsyResult: BiopsyResult | null;
+  stagingExaminations: string[];
   mdtDate: string | null;
   treatmentRoute: TreatmentRoute | null;
   treatmentSite: TreatmentSite | null;
@@ -92,6 +105,13 @@ export const diagnoses = [
   { code: "D07", label: "Karcinom in situ jiných a neurčených pohlavních orgánů" },
 ];
 
+export const standardStagingExaminations = [
+  "CT",
+  "MRI",
+  "PET/CT",
+  "Tumorové markery",
+] as const;
+
 export const initialPatients: Patient[] = [
   {
     id: "demo-001",
@@ -106,7 +126,13 @@ export const initialPatients: Patient[] = [
     diagnosisCertainty: "Histologicky potvrzená",
     intakeDate: "2026-08-12",
     biopsyStatus: "Provedena v ÚVN",
-    externalBiopsy: null,
+    biopsyResult: {
+      date: "2026-08-20",
+      facility: "ÚVN Praha",
+      reportReference: "HIST-DEMO-2026-1048",
+      conclusion: "Endometroidní adenokarcinom, další parametry v dokumentaci.",
+    },
+    stagingExaminations: ["CT", "MRI", "Tumorové markery"],
     mdtDate: "2026-08-27",
     treatmentRoute: "Primární operace",
     treatmentSite: "ÚVN",
@@ -169,12 +195,13 @@ export const initialPatients: Patient[] = [
     diagnosisCertainty: "Předběžně potvrzená",
     intakeDate: "2026-08-24",
     biopsyStatus: "Provedena externě",
-    externalBiopsy: {
+    biopsyResult: {
       date: "2026-08-18",
       facility: "Krajská nemocnice Demo",
       reportReference: "HIST-DEMO-2026-1842",
       conclusion: "Suspektní high-grade serózní karcinom; preparáty předány k revizi.",
     },
+    stagingExaminations: [],
     mdtDate: null,
     treatmentRoute: null,
     treatmentSite: null,
@@ -228,7 +255,13 @@ export const initialPatients: Patient[] = [
     diagnosisCertainty: "Histologicky potvrzená",
     intakeDate: "2026-07-30",
     biopsyStatus: "Provedena v ÚVN",
-    externalBiopsy: null,
+    biopsyResult: {
+      date: "2026-08-06",
+      facility: "ÚVN Praha",
+      reportReference: "HIST-DEMO-2026-3062",
+      conclusion: "Spinocelulární karcinom děložního hrdla (syntetický nález).",
+    },
+    stagingExaminations: ["MRI"],
     mdtDate: "2026-09-01",
     treatmentRoute: null,
     treatmentSite: null,
@@ -282,7 +315,13 @@ export const initialPatients: Patient[] = [
     diagnosisCertainty: "Histologicky potvrzená",
     intakeDate: "2026-05-14",
     biopsyStatus: "Provedena v ÚVN",
-    externalBiopsy: null,
+    biopsyResult: {
+      date: "2026-05-16",
+      facility: "ÚVN Praha",
+      reportReference: "HIST-DEMO-2026-4179",
+      conclusion: "Spinocelulární karcinom vulvy (syntetický nález).",
+    },
+    stagingExaminations: ["CT"],
     mdtDate: "2026-05-21",
     treatmentRoute: "Primární operace",
     treatmentSite: "ÚVN",
@@ -336,7 +375,8 @@ export const initialPatients: Patient[] = [
     diagnosisCertainty: "Histologicky potvrzená",
     intakeDate: "2026-08-31",
     biopsyStatus: "Nutno provést",
-    externalBiopsy: null,
+    biopsyResult: null,
+    stagingExaminations: [],
     mdtDate: null,
     treatmentRoute: null,
     treatmentSite: null,
@@ -370,7 +410,7 @@ export const initialPatients: Patient[] = [
   },
 ];
 
-export const demoTasks = [
+export const demoTasks: CareTask[] = [
   {
     id: "t1",
     patientId: "demo-003",

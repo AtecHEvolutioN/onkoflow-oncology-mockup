@@ -4140,6 +4140,197 @@ p {
   margin: 18px 23px 0;
 }
 
+.staging-examination-result {
+  margin: 0 20px 20px;
+  padding: 14px;
+  border: 1px solid #d9e2f2;
+  border-radius: 10px;
+  background: #f7f9fd;
+}
+
+.staging-examination-result-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.staging-examination-result-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--violet);
+  background: var(--violet-soft);
+}
+
+.staging-examination-result-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.staging-examination-result-header span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.staging-examination-result-header strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.staging-examination-result ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 13px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid #e1e7f2;
+  list-style: none;
+}
+
+.staging-examination-result li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted-strong);
+  font-size: 11px;
+}
+
+.staging-examination-result li svg {
+  flex: 0 0 auto;
+  color: var(--teal);
+}
+
+.staging-choice {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: #f8fafb;
+}
+
+.staging-choice legend {
+  padding: 0 5px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.staging-choice > p {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.staging-checklist {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.staging-option {
+  display: flex;
+  min-width: 0;
+  min-height: 45px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: white;
+  transition: 130ms ease;
+}
+
+.staging-option.selected {
+  border-color: #79b8b0;
+  background: var(--teal-soft);
+}
+
+.staging-option label {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 9px;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.staging-option input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  accent-color: var(--teal);
+}
+
+.staging-option > button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--muted);
+  background: transparent;
+}
+
+.staging-option > button:hover {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
+.staging-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.staging-add-row input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  outline: 0;
+  color: var(--ink);
+  background: white;
+  font-size: 13px;
+}
+
+.staging-add-row input:focus {
+  border-color: #79aaa3;
+  box-shadow: 0 0 0 3px rgb(15 118 110 / 0.09);
+}
+
+.staging-selection-count {
+  display: block;
+  margin-top: 9px;
+  color: var(--teal-dark);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.event-task-note {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  color: var(--teal-dark);
+  background: var(--teal-soft);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
 .biopsy-choice-grid.two-options {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -4301,6 +4492,58 @@ p {
 
   .advance-choice {
     margin: 16px 16px 0;
+  }
+
+  .staging-examination-result {
+    margin: 0 14px 14px;
+    padding: 13px;
+  }
+
+  .staging-examination-result-header span {
+    font-size: 10px;
+  }
+
+  .staging-examination-result-header strong {
+    font-size: 13px;
+  }
+
+  .staging-examination-result ul,
+  .staging-checklist {
+    grid-template-columns: 1fr;
+  }
+
+  .staging-examination-result li,
+  .staging-option label {
+    font-size: 13px;
+  }
+
+  .staging-choice legend {
+    font-size: 13px;
+  }
+
+  .staging-choice > p,
+  .staging-selection-count {
+    font-size: 11px;
+  }
+
+  .staging-option {
+    min-height: 52px;
+    padding: 10px 12px;
+  }
+
+  .staging-option input {
+    width: 18px;
+    height: 18px;
+  }
+
+  .staging-add-row input {
+    min-height: 48px;
+    font-size: 16px;
+  }
+
+  .event-task-note {
+    min-height: 48px;
+    font-size: 11px;
   }
 
   .biopsy-choice-grid.two-options,

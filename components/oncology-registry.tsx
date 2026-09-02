@@ -34,6 +34,7 @@ import {
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   BiopsyStatus,
+  CareTask,
   CarePhase,
   EventKind,
   Patient,
@@ -45,6 +46,7 @@ import {
   initialPatients,
   corePathwaySteps,
   processSummarySteps,
+  standardStagingExaminations,
   treatmentRoutes,
 } from "@/lib/mock-data";
 import {
@@ -112,6 +114,32 @@ function formatLongDate(value: string) {
     month: "long",
     year: "numeric",
   }).format(date);
+}
+
+function createNextStepTask(patient: Patient): CareTask {
+  return {
+    id: `task-next-${patient.id}-${patient.nextStepDate}-${Date.now()}`,
+    patientId: patient.id,
+    patient: `${patient.firstName} ${patient.lastName}`,
+    title: patient.nextStep,
+    date: patient.nextStepDate,
+    time: "—",
+    status: "Naplánováno",
+    priority: patient.priority,
+  };
+}
+
+function createTaskFromEvent(patient: Patient, event: TimelineEvent): CareTask {
+  return {
+    id: `task-${event.id}`,
+    patientId: patient.id,
+    patient: `${patient.firstName} ${patient.lastName}`,
+    title: event.title,
+    date: event.date,
+    time: event.time || "—",
+    status: event.status,
+    priority: patient.priority,
+  };
 }
 
 function calculateAge(value: string) {
@@ -217,6 +245,9 @@ function PatientPathway({ patient }: { patient: Patient }) {
 
           if (step.phase === "Příjem") detail = formatDate(patient.intakeDate);
           if (step.phase === "Biopsie") detail = patient.biopsyStatus;
+          if (step.phase === "Staging" && patient.stagingExaminations.length > 0) {
+            detail = patient.stagingExaminations.join(" · ");
+          }
           if (step.phase === "MDT") {
             detail = patient.mdtDate ? formatDate(patient.mdtDate) : "Datum zatím neurčeno";
           }
@@ -315,6 +346,7 @@ function EmptyState({
 
 export function OncologyRegistry() {
   const [patients, setPatients] = useState<Patient[]>(initialPatients);
+  const [tasks, setTasks] = useState<CareTask[]>(demoTasks);
   const [activeView, setActiveView] = useState<View>("dashboard");
   const [selectedPatientId, setSelectedPatientId] = useState(initialPatients[0].id);
   const [searchQuery, setSearchQuery] = useState("");
@@ -351,6 +383,7 @@ export function OncologyRegistry() {
 
   const createPatient = (patient: Patient) => {
     setPatients((current) => [patient, ...current]);
+    setTasks((current) => [createNextStepTask(patient), ...current]);
     setSelectedPatientId(patient.id);
     setActiveView("patient");
     setIsNewPatientOpen(false);
@@ -358,6 +391,7 @@ export function OncologyRegistry() {
   };
 
   const addEvent = (event: TimelineEvent) => {
+    if (!selectedPatient) return;
     setPatients((current) =>
       current.map((patient) =>
         patient.id === selectedPatientId
@@ -377,6 +411,19 @@ export function OncologyRegistry() {
           : patient,
       ),
     );
+    setTasks((current) => {
+      const withoutMatchingTask = current.filter(
+        (task) =>
+          !(
+            task.patientId === selectedPatient.id &&
+            task.title === event.title &&
+            task.date === event.date
+          ),
+      );
+      return event.status === "Dokončeno"
+        ? withoutMatchingTask
+        : [createTaskFromEvent(selectedPatient, event), ...withoutMatchingTask];
+    });
     setIsNewEventOpen(false);
     setToast("Nová událost byla přidána do časové osy.");
   };
@@ -394,6 +441,12 @@ export function OncologyRegistry() {
         patient.id === selectedPatient.id ? updatedPatient : patient,
       ),
     );
+    setTasks((current) => [
+      createNextStepTask(updatedPatient),
+      ...current.filter(
+        (task) => task.patientId !== selectedPatient.id || task.date > input.date,
+      ),
+    ]);
     setIsAdvancePhaseOpen(false);
     setToast(`Pacient byl posunut do fáze ${updatedPatient.phase}.`);
   };
@@ -435,7 +488,7 @@ export function OncologyRegistry() {
               >
                 <Icon size={19} aria-hidden="true" />
                 <span>{item.label}</span>
-                {item.id === "tasks" ? <span className="nav-count">4</span> : null}
+                {item.id === "tasks" ? <span className="nav-count">{tasks.length}</span> : null}
               </button>
             );
           })}
@@ -506,7 +559,12 @@ export function OncologyRegistry() {
 
         <section className="page-content">
           {activeView === "dashboard" && (
-            <DashboardView patients={patients} openPatient={openPatient} navigate={navigate} />
+            <DashboardView
+              patients={patients}
+              tasks={tasks}
+              openPatient={openPatient}
+              navigate={navigate}
+            />
           )}
           {activeView === "patients" && (
             <PatientsView
@@ -525,7 +583,7 @@ export function OncologyRegistry() {
               openAdvancePhase={() => setIsAdvancePhaseOpen(true)}
             />
           )}
-          {activeView === "tasks" && <TasksView openPatient={openPatient} />}
+          {activeView === "tasks" && <TasksView tasks={tasks} openPatient={openPatient} />}
           {activeView === "audit" && <AuditView />}
         </section>
       </main>
@@ -546,7 +604,9 @@ export function OncologyRegistry() {
             >
               <span className="mobile-nav-icon">
                 <Icon size={20} aria-hidden="true" />
-                {item.id === "tasks" ? <span className="mobile-nav-count">4</span> : null}
+                {item.id === "tasks" ? (
+                  <span className="mobile-nav-count">{tasks.length}</span>
+                ) : null}
               </span>
               <span>
                 {item.id === "tasks" ? "Úkoly" : item.id === "audit" ? "Audit" : item.label}
@@ -588,10 +648,12 @@ export function OncologyRegistry() {
 
 function DashboardView({
   patients,
+  tasks,
   openPatient,
   navigate,
 }: {
   patients: Patient[];
+  tasks: CareTask[];
   openPatient: (id: string) => void;
   navigate: (view: View) => void;
 }) {
@@ -603,6 +665,10 @@ function DashboardView({
       patient.phase === "Paliace",
   ).length;
   const recentPatients = patients.slice(0, 4);
+  const upcomingTasks = useMemo(
+    () => [...tasks].sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`)),
+    [tasks],
+  );
 
   return (
     <>
@@ -706,7 +772,7 @@ function DashboardView({
             </button>
           </div>
           <div className="task-stack">
-            {demoTasks.slice(0, 3).map((task) => (
+            {upcomingTasks.slice(0, 3).map((task) => (
               <button className="task-card" key={task.id} type="button" onClick={() => openPatient(task.patientId)}>
                 <div className="task-date-block">
                   <strong>{new Date(`${task.date}T12:00:00`).getDate()}</strong>
@@ -1081,28 +1147,54 @@ function PatientDetail({
                 <strong>{patient.secondaryDiagnoses.join(", ") || "Bez záznamu"}</strong>
               </div>
             </div>
-            {patient.externalBiopsy ? (
+            {patient.biopsyResult ? (
               <article className="external-biopsy-result">
                 <div className="external-biopsy-result-header">
                   <span className="external-biopsy-result-icon">
                     <Microscope size={18} aria-hidden="true" />
                   </span>
                   <div>
-                    <span>Výsledek externí biopsie</span>
-                    <strong>{patient.externalBiopsy.facility}</strong>
+                    <span>
+                      {patient.biopsyStatus === "Provedena v ÚVN"
+                        ? "Výsledek biopsie z ÚVN"
+                        : "Výsledek externí biopsie"}
+                    </span>
+                    <strong>{patient.biopsyResult.facility}</strong>
                   </div>
                 </div>
-                <p>{patient.externalBiopsy.conclusion}</p>
+                <p>{patient.biopsyResult.conclusion}</p>
                 <div className="external-biopsy-result-meta">
                   <span>
-                    Datum odběru / výkonu: <strong>{formatLongDate(patient.externalBiopsy.date)}</strong>
+                    Datum odběru / výkonu:{" "}
+                    <strong>{formatLongDate(patient.biopsyResult.date)}</strong>
                   </span>
-                  {patient.externalBiopsy.reportReference ? (
+                  {patient.biopsyResult.reportReference ? (
                     <span>
-                      Reference nálezu: <strong>{patient.externalBiopsy.reportReference}</strong>
+                      Reference nálezu: <strong>{patient.biopsyResult.reportReference}</strong>
                     </span>
                   ) : null}
                 </div>
+              </article>
+            ) : null}
+            {patient.stagingExaminations.length > 0 ? (
+              <article className="staging-examination-result">
+                <div className="staging-examination-result-header">
+                  <span className="staging-examination-result-icon">
+                    <ScanLine size={18} aria-hidden="true" />
+                  </span>
+                  <div>
+                    <span>Dokončený staging</span>
+                    <strong>Provedená vyšetření</strong>
+                  </div>
+                </div>
+                <ul>
+                  {patient.stagingExaminations.map((examination) => (
+                    <li key={examination}>
+                      <CircleCheck size={16} aria-hidden="true" />
+                      {examination}
+                    </li>
+                  ))}
+                </ul>
               </article>
             ) : null}
           </section>
@@ -1230,33 +1322,45 @@ function PatientDetail({
   );
 }
 
-function TasksView({ openPatient }: { openPatient: (id: string) => void }) {
+function TasksView({
+  tasks,
+  openPatient,
+}: {
+  tasks: CareTask[];
+  openPatient: (id: string) => void;
+}) {
+  const sortedTasks = useMemo(
+    () => [...tasks].sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`)),
+    [tasks],
+  );
+  const todayCount = tasks.filter((task) => task.date === "2026-09-01").length;
+  const thisWeekCount = tasks.filter(
+    (task) => task.date >= "2026-09-01" && task.date <= "2026-09-07",
+  ).length;
+  const highPriorityCount = tasks.filter((task) => task.priority === "Vysoká").length;
+
   return (
     <>
-      <div className="page-heading heading-with-action">
-        <div>
-          <p className="eyebrow">Koordinace péče</p>
-          <h1>Úkoly a termíny</h1>
-          <p>Plánované kroky napříč aktivními onkologickými epizodami.</p>
-        </div>
-        <button className="button button-primary" type="button">
-          <Plus size={18} aria-hidden="true" />
-          Nový úkol
-        </button>
+      <div className="page-heading">
+        <p className="eyebrow">Koordinace péče</p>
+        <h1>Úkoly a termíny</h1>
+        <p>
+          Nové události a termíny se zadávají v detailu konkrétního pacienta.
+        </p>
       </div>
 
       <div className="task-metrics">
         <div className="task-metric">
           <span>Dnes</span>
-          <strong>1</strong>
+          <strong>{todayCount}</strong>
         </div>
         <div className="task-metric">
           <span>Tento týden</span>
-          <strong>4</strong>
+          <strong>{thisWeekCount}</strong>
         </div>
         <div className="task-metric warning">
           <span>Vyšší priorita</span>
-          <strong>2</strong>
+          <strong>{highPriorityCount}</strong>
         </div>
       </div>
 
@@ -1268,7 +1372,7 @@ function TasksView({ openPatient }: { openPatient: (id: string) => void }) {
           </div>
         </div>
         <div className="large-task-list">
-          {demoTasks.map((task) => (
+          {sortedTasks.map((task) => (
             <button className="large-task-row" key={task.id} type="button" onClick={() => openPatient(task.patientId)}>
               <div className="large-task-date">
                 <CalendarDays size={19} aria-hidden="true" />
@@ -1367,10 +1471,10 @@ function NewPatientModal({
   const [primaryDiagnosis, setPrimaryDiagnosis] = useState("C54.1");
   const [certainty, setCertainty] = useState<Patient["diagnosisCertainty"]>("Suspektní");
   const [biopsyStatus, setBiopsyStatus] = useState<BiopsyStatus>("Nutno provést");
-  const [externalBiopsyDate, setExternalBiopsyDate] = useState("");
-  const [externalBiopsyFacility, setExternalBiopsyFacility] = useState("");
-  const [externalBiopsyReference, setExternalBiopsyReference] = useState("");
-  const [externalBiopsyConclusion, setExternalBiopsyConclusion] = useState("");
+  const [biopsyDate, setBiopsyDate] = useState("");
+  const [biopsyFacility, setBiopsyFacility] = useState("");
+  const [biopsyReference, setBiopsyReference] = useState("");
+  const [biopsyConclusion, setBiopsyConclusion] = useState("");
   const [secondaryDiagnoses, setSecondaryDiagnoses] = useState<string[]>([]);
   const [secondarySelection, setSecondarySelection] = useState("");
   const [formError, setFormError] = useState("");
@@ -1392,12 +1496,12 @@ function NewPatientModal({
     setFirstName("Nová");
     setLastName("Testovací");
     setPrimaryDiagnosis("C54.1");
-    setCertainty("Předběžně potvrzená");
-    setBiopsyStatus("Provedena externě");
-    setExternalBiopsyDate("2026-08-25");
-    setExternalBiopsyFacility("Nemocnice Demo");
-    setExternalBiopsyReference("HIST-DEMO-2026-0001");
-    setExternalBiopsyConclusion(
+    setCertainty("Histologicky potvrzená");
+    setBiopsyStatus("Provedena v ÚVN");
+    setBiopsyDate("2026-08-25");
+    setBiopsyFacility("");
+    setBiopsyReference("HIST-DEMO-2026-0001");
+    setBiopsyConclusion(
       "Endometrioidní adenokarcinom endometria, FIGO grade 2 (demo výsledek).",
     );
     setFormError("");
@@ -1419,28 +1523,29 @@ function NewPatientModal({
       setFormError("Vyplňte jméno a příjmení.");
       return;
     }
+    const biopsyAlreadyCompleted = biopsyStatus !== "Nutno provést";
     if (
-      biopsyStatus === "Provedena externě" &&
-      (!externalBiopsyDate || !externalBiopsyFacility.trim() || !externalBiopsyConclusion.trim())
+      biopsyAlreadyCompleted &&
+      (!biopsyDate ||
+        !biopsyConclusion.trim() ||
+        (biopsyStatus === "Provedena externě" && !biopsyFacility.trim()))
     ) {
       setFormError(
-        "U externí biopsie vyplňte datum, pracoviště a závěr histologického nálezu.",
+        "U provedené biopsie vyplňte datum, pracoviště a závěr histologického nálezu.",
       );
       return;
     }
 
     const timestamp = Date.now();
     const id = `demo-${timestamp}`;
-    const biopsyAlreadyCompleted = biopsyStatus !== "Nutno provést";
-    const externalBiopsy: Patient["externalBiopsy"] =
-      biopsyStatus === "Provedena externě"
-        ? {
-            date: externalBiopsyDate,
-            facility: externalBiopsyFacility.trim(),
-            reportReference: externalBiopsyReference.trim(),
-            conclusion: externalBiopsyConclusion.trim(),
-          }
-        : null;
+    const biopsyResult: Patient["biopsyResult"] = biopsyAlreadyCompleted
+      ? {
+          date: biopsyDate,
+          facility: biopsyStatus === "Provedena v ÚVN" ? "ÚVN Praha" : biopsyFacility.trim(),
+          reportReference: biopsyReference.trim(),
+          conclusion: biopsyConclusion.trim(),
+        }
+      : null;
     const intakeEvent: TimelineEvent = {
       id: `event-${timestamp}-intake`,
       kind: "intake",
@@ -1455,14 +1560,15 @@ function NewPatientModal({
           {
             id: `event-${timestamp}-biopsy`,
             kind: "pathology",
-            date: externalBiopsy?.date ?? intakeDate,
-            title: externalBiopsy
-              ? "Externí biopsie doložena při příjmu"
-              : "Biopsie doložena při příjmu",
-            description: externalBiopsy
-              ? `${externalBiopsy.facility}: ${externalBiopsy.conclusion}${
-                  externalBiopsy.reportReference
-                    ? ` Reference nálezu: ${externalBiopsy.reportReference}.`
+            date: biopsyResult?.date ?? intakeDate,
+            title:
+              biopsyStatus === "Provedena externě"
+                ? "Externí biopsie doložena při příjmu"
+                : "Biopsie z ÚVN doložena při příjmu",
+            description: biopsyResult
+              ? `${biopsyResult.facility}: ${biopsyResult.conclusion}${
+                  biopsyResult.reportReference
+                    ? ` Reference nálezu: ${biopsyResult.reportReference}.`
                     : ""
                 } Druhá biopsie se neplánuje; další krok je staging.`
               : `${biopsyStatus}. Druhá biopsie se neplánuje; další krok je staging.`,
@@ -1486,7 +1592,8 @@ function NewPatientModal({
       diagnosisCertainty: certainty,
       intakeDate,
       biopsyStatus,
-      externalBiopsy,
+      biopsyResult,
+      stagingExaminations: [],
       mdtDate: null,
       treatmentRoute: null,
       treatmentSite: null,
@@ -1656,7 +1763,7 @@ function NewPatientModal({
                       {
                         value: "Provedena v ÚVN",
                         title: "Provedena v ÚVN",
-                        description: "Pokračovat do stagingu",
+                        description: "Doplnit výsledek a pokračovat do stagingu",
                       },
                       {
                         value: "Provedena externě",
@@ -1683,13 +1790,17 @@ function NewPatientModal({
                     </label>
                   ))}
                 </div>
-                {biopsyStatus === "Provedena externě" ? (
+                {biopsyStatus !== "Nutno provést" ? (
                   <div className="external-biopsy-fields" aria-live="polite">
                     <div className="external-biopsy-heading">
                       <div>
-                        <strong>Výsledek externí biopsie</strong>
+                        <strong>
+                          {biopsyStatus === "Provedena v ÚVN"
+                            ? "Výsledek biopsie z ÚVN"
+                            : "Výsledek externí biopsie"}
+                        </strong>
                         <small>
-                          Zapište údaje z doloženého histologického nálezu. Reference je volitelná.
+                          Zapište údaje z histologického nálezu. Reference je volitelná.
                         </small>
                       </div>
                       <Microscope size={19} aria-hidden="true" />
@@ -1699,35 +1810,40 @@ function NewPatientModal({
                         <span>Datum odběru / výkonu *</span>
                         <input
                           type="date"
-                          value={externalBiopsyDate}
-                          onChange={(event) => setExternalBiopsyDate(event.target.value)}
+                          value={biopsyDate}
+                          onChange={(event) => setBiopsyDate(event.target.value)}
                           required
                         />
                       </label>
                       <label className="form-field">
-                        <span>Externí pracoviště *</span>
+                        <span>Pracoviště *</span>
                         <input
-                          value={externalBiopsyFacility}
-                          onChange={(event) => setExternalBiopsyFacility(event.target.value)}
-                          placeholder="Např. Nemocnice Demo"
+                          value={
+                            biopsyStatus === "Provedena v ÚVN"
+                              ? "ÚVN Praha"
+                              : biopsyFacility
+                          }
+                          onChange={(event) => setBiopsyFacility(event.target.value)}
+                          placeholder="Název externího pracoviště"
+                          readOnly={biopsyStatus === "Provedena v ÚVN"}
                           required
                         />
                       </label>
                       <label className="form-field full-column">
                         <span>Reference nálezu</span>
                         <input
-                          value={externalBiopsyReference}
-                          onChange={(event) => setExternalBiopsyReference(event.target.value)}
+                          value={biopsyReference}
+                          onChange={(event) => setBiopsyReference(event.target.value)}
                           placeholder="Číslo biopsie / histologického nálezu"
                         />
                       </label>
                       <label className="form-field full-column">
                         <span>Závěr histologického nálezu *</span>
                         <textarea
-                          value={externalBiopsyConclusion}
-                          onChange={(event) => setExternalBiopsyConclusion(event.target.value)}
+                          value={biopsyConclusion}
+                          onChange={(event) => setBiopsyConclusion(event.target.value)}
                           rows={4}
-                          placeholder="Stručný závěr externího histologického nálezu…"
+                          placeholder="Stručný závěr histologického nálezu…"
                           required
                         />
                       </label>
@@ -1774,10 +1890,19 @@ function AdvancePatientModal({
   const [date, setDate] = useState("2026-09-02");
   const [note, setNote] = useState("");
   const [biopsyStatus, setBiopsyStatus] = useState<CompletedBiopsyStatus | null>(null);
-  const [externalBiopsyDate, setExternalBiopsyDate] = useState("2026-09-02");
-  const [externalBiopsyFacility, setExternalBiopsyFacility] = useState("");
-  const [externalBiopsyReference, setExternalBiopsyReference] = useState("");
-  const [externalBiopsyConclusion, setExternalBiopsyConclusion] = useState("");
+  const [biopsyDate, setBiopsyDate] = useState("2026-09-02");
+  const [biopsyFacility, setBiopsyFacility] = useState("");
+  const [biopsyReference, setBiopsyReference] = useState("");
+  const [biopsyConclusion, setBiopsyConclusion] = useState("");
+  const [stagingChoices, setStagingChoices] = useState<string[]>(() =>
+    Array.from(
+      new Set([...standardStagingExaminations, ...patient.stagingExaminations]),
+    ),
+  );
+  const [selectedStagingExaminations, setSelectedStagingExaminations] = useState<string[]>(
+    patient.stagingExaminations,
+  );
+  const [customStagingExamination, setCustomStagingExamination] = useState("");
   const [treatmentRoute, setTreatmentRoute] = useState<TreatmentRoute | null>(null);
   const [formError, setFormError] = useState("");
 
@@ -1798,6 +1923,37 @@ function AdvancePatientModal({
 
   const targetLabel = treatmentRoute ?? action.targetLabel;
 
+  const toggleStagingExamination = (examination: string) => {
+    setSelectedStagingExaminations((current) =>
+      current.includes(examination)
+        ? current.filter((item) => item !== examination)
+        : [...current, examination],
+    );
+    setFormError("");
+  };
+
+  const addCustomStagingExamination = () => {
+    const trimmed = customStagingExamination.trim();
+    if (!trimmed) return;
+    const existing = stagingChoices.find(
+      (item) => item.localeCompare(trimmed, "cs", { sensitivity: "base" }) === 0,
+    );
+    const examination = existing ?? trimmed;
+    if (!existing) setStagingChoices((current) => [...current, examination]);
+    setSelectedStagingExaminations((current) =>
+      current.includes(examination) ? current : [...current, examination],
+    );
+    setCustomStagingExamination("");
+    setFormError("");
+  };
+
+  const removeCustomStagingExamination = (examination: string) => {
+    setStagingChoices((current) => current.filter((item) => item !== examination));
+    setSelectedStagingExaminations((current) =>
+      current.filter((item) => item !== examination),
+    );
+  };
+
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!date) {
@@ -1810,14 +1966,18 @@ function AdvancePatientModal({
     }
     if (
       patient.phase === "Biopsie" &&
-      biopsyStatus === "Provedena externě" &&
-      (!externalBiopsyDate ||
-        !externalBiopsyFacility.trim() ||
-        !externalBiopsyConclusion.trim())
+      biopsyStatus &&
+      (!biopsyDate ||
+        !biopsyConclusion.trim() ||
+        (biopsyStatus === "Provedena externě" && !biopsyFacility.trim()))
     ) {
       setFormError(
-        "U externí biopsie vyplňte datum, pracoviště a závěr histologického nálezu.",
+        "U provedené biopsie vyplňte datum, pracoviště a závěr histologického nálezu.",
       );
+      return;
+    }
+    if (patient.phase === "Staging" && selectedStagingExaminations.length === 0) {
+      setFormError("Vyberte alespoň jedno dokončené stagingové vyšetření.");
       return;
     }
     if (patient.phase === "MDT" && !treatmentRoute) {
@@ -1829,15 +1989,19 @@ function AdvancePatientModal({
       date,
       note,
       biopsyStatus,
-      externalBiopsy:
-        biopsyStatus === "Provedena externě"
+      biopsyResult:
+        patient.phase === "Biopsie" && biopsyStatus
           ? {
-              date: externalBiopsyDate,
-              facility: externalBiopsyFacility.trim(),
-              reportReference: externalBiopsyReference.trim(),
-              conclusion: externalBiopsyConclusion.trim(),
+              date: biopsyDate,
+              facility:
+                biopsyStatus === "Provedena v ÚVN"
+                  ? "ÚVN Praha"
+                  : biopsyFacility.trim(),
+              reportReference: biopsyReference.trim(),
+              conclusion: biopsyConclusion.trim(),
             }
           : null,
+      stagingExaminations: selectedStagingExaminations,
       treatmentRoute,
     });
   };
@@ -1892,7 +2056,7 @@ function AdvancePatientModal({
                     {
                       value: "Provedena v ÚVN",
                       title: "Provedena v ÚVN",
-                      description: "Výsledek z místního pracoviště",
+                      description: "Doplnit výsledek z místního pracoviště",
                     },
                     {
                       value: "Provedena externě",
@@ -1923,11 +2087,15 @@ function AdvancePatientModal({
                 ))}
               </div>
 
-              {biopsyStatus === "Provedena externě" ? (
+              {biopsyStatus ? (
                 <div className="external-biopsy-fields" aria-live="polite">
                   <div className="external-biopsy-heading">
                     <div>
-                      <strong>Výsledek externí biopsie</strong>
+                      <strong>
+                        {biopsyStatus === "Provedena v ÚVN"
+                          ? "Výsledek biopsie z ÚVN"
+                          : "Výsledek externí biopsie"}
+                      </strong>
                       <small>Reference nálezu je volitelná.</small>
                     </div>
                     <Microscope size={19} aria-hidden="true" />
@@ -1937,41 +2105,115 @@ function AdvancePatientModal({
                       <span>Datum odběru / výkonu *</span>
                       <input
                         type="date"
-                        value={externalBiopsyDate}
-                        onChange={(event) => setExternalBiopsyDate(event.target.value)}
+                        value={biopsyDate}
+                        onChange={(event) => setBiopsyDate(event.target.value)}
                         required
                       />
                     </label>
                     <label className="form-field">
-                      <span>Externí pracoviště *</span>
+                      <span>Pracoviště *</span>
                       <input
-                        value={externalBiopsyFacility}
-                        onChange={(event) => setExternalBiopsyFacility(event.target.value)}
-                        placeholder="Např. Nemocnice Demo"
+                        value={
+                          biopsyStatus === "Provedena v ÚVN"
+                            ? "ÚVN Praha"
+                            : biopsyFacility
+                        }
+                        onChange={(event) => setBiopsyFacility(event.target.value)}
+                        placeholder="Název externího pracoviště"
+                        readOnly={biopsyStatus === "Provedena v ÚVN"}
                         required
                       />
                     </label>
                     <label className="form-field full-column">
                       <span>Reference nálezu</span>
                       <input
-                        value={externalBiopsyReference}
-                        onChange={(event) => setExternalBiopsyReference(event.target.value)}
+                        value={biopsyReference}
+                        onChange={(event) => setBiopsyReference(event.target.value)}
                         placeholder="Číslo biopsie / histologického nálezu"
                       />
                     </label>
                     <label className="form-field full-column">
                       <span>Závěr histologického nálezu *</span>
                       <textarea
-                        value={externalBiopsyConclusion}
-                        onChange={(event) => setExternalBiopsyConclusion(event.target.value)}
+                        value={biopsyConclusion}
+                        onChange={(event) => setBiopsyConclusion(event.target.value)}
                         rows={4}
-                        placeholder="Stručný závěr externího histologického nálezu…"
+                        placeholder="Stručný závěr histologického nálezu…"
                         required
                       />
                     </label>
                   </div>
                 </div>
               ) : null}
+            </fieldset>
+          ) : null}
+
+          {patient.phase === "Staging" ? (
+            <fieldset className="staging-choice advance-choice">
+              <legend>Dokončená stagingová vyšetření *</legend>
+              <p>
+                Vyberte všechna relevantní vyšetření. Další položku můžete přidat ručně.
+              </p>
+              <div className="staging-checklist">
+                {stagingChoices.map((examination) => {
+                  const selected = selectedStagingExaminations.includes(examination);
+                  const custom = !standardStagingExaminations.some(
+                    (standard) => standard === examination,
+                  );
+                  return (
+                    <div
+                      className={`staging-option ${selected ? "selected" : ""}`}
+                      key={examination}
+                    >
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => toggleStagingExamination(examination)}
+                        />
+                        <span>{examination}</span>
+                      </label>
+                      {custom ? (
+                        <button
+                          type="button"
+                          aria-label={`Odebrat vlastní vyšetření ${examination}`}
+                          onClick={() => removeCustomStagingExamination(examination)}
+                        >
+                          <X size={15} aria-hidden="true" />
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="staging-add-row">
+                <label className="sr-only" htmlFor="custom-staging-examination">
+                  Přidat vlastní stagingové vyšetření
+                </label>
+                <input
+                  id="custom-staging-examination"
+                  value={customStagingExamination}
+                  onChange={(event) => setCustomStagingExamination(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addCustomStagingExamination();
+                    }
+                  }}
+                  placeholder="Další vyšetření…"
+                />
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={addCustomStagingExamination}
+                >
+                  <Plus size={16} aria-hidden="true" />
+                  Přidat
+                </button>
+              </div>
+              <small className="staging-selection-count">
+                Vybráno: {selectedStagingExaminations.length}
+              </small>
             </fieldset>
           ) : null}
 
@@ -2020,7 +2262,11 @@ function AdvancePatientModal({
                   setFormError("");
                 }}
                 required
-                autoFocus={patient.phase !== "Biopsie" && patient.phase !== "MDT"}
+                autoFocus={
+                  patient.phase !== "Biopsie" &&
+                  patient.phase !== "Staging" &&
+                  patient.phase !== "MDT"
+                }
               />
             </label>
             <div className="advance-audit-note">
@@ -2071,6 +2317,7 @@ function NewEventModal({
 }) {
   const [kind, setKind] = useState<EventKind>("imaging");
   const [date, setDate] = useState("2026-09-01");
+  const [time, setTime] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TimelineEvent["status"]>("Naplánováno");
@@ -2090,6 +2337,7 @@ function NewEventModal({
       id: `event-${Date.now()}`,
       kind,
       date,
+      time: time || undefined,
       title: title.trim(),
       description: description.trim() || "Bez doplňující poznámky.",
       author: "Andrej Demo",
@@ -2129,6 +2377,18 @@ function NewEventModal({
               <span>Datum</span>
               <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
             </label>
+            <label className="form-field">
+              <span>Čas</span>
+              <input type="time" value={time} onChange={(event) => setTime(event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Stav</span>
+              <select value={status} onChange={(event) => setStatus(event.target.value as TimelineEvent["status"])}>
+                <option>Naplánováno</option>
+                <option>Dokončeno</option>
+                <option>Čeká na výsledek</option>
+              </select>
+            </label>
             <label className="form-field full-column">
               <span>Název *</span>
               <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Např. CT staging" autoFocus />
@@ -2137,14 +2397,10 @@ function NewEventModal({
               <span>Poznámka</span>
               <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} placeholder="Stručný popis události…" />
             </label>
-            <label className="form-field full-column">
-              <span>Stav</span>
-              <select value={status} onChange={(event) => setStatus(event.target.value as TimelineEvent["status"])}>
-                <option>Naplánováno</option>
-                <option>Dokončeno</option>
-                <option>Čeká na výsledek</option>
-              </select>
-            </label>
+            <div className="event-task-note full-column">
+              <ListChecks size={17} aria-hidden="true" />
+              <span>Naplánovaná událost se zobrazí také v Úkolech a termínech.</span>
+            </div>
           </div>
           <div className="modal-footer">
             <button className="button button-secondary" type="button" onClick={onClose}>Zrušit</button>
