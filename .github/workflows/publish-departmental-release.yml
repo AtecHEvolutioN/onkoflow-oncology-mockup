@@ -1,0 +1,107 @@
+name: Publish departmental build
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-departmental-release
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    name: Build and publish ZIP
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build departmental export
+        run: npm run build:department
+
+      - name: Verify and package the export
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f out/index.html
+          test ! -e out/data
+
+          version="$(node -p "require('./package.json').version")"
+          short_sha="${GITHUB_SHA:0:12}"
+          tag="department-v${version}-${short_sha}"
+          archive="OnkoFlow-department-v${version}-${short_sha}.zip"
+
+          (
+            cd out
+            zip -q -X -r "../${archive}" .
+          )
+
+          sha256sum "${archive}" > "${archive}.sha256"
+
+          {
+            echo "version=${version}"
+            echo "short_sha=${short_sha}"
+            echo "tag=${tag}"
+            echo "archive=${archive}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Check whether this commit is already published
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.package.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Publish GitHub release
+        if: steps.release.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.package.outputs.tag }}
+          ARCHIVE: ${{ steps.package.outputs.archive }}
+          APP_VERSION: ${{ steps.package.outputs.version }}
+          SHORT_SHA: ${{ steps.package.outputs.short_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gh release create "${RELEASE_TAG}" \
+            "${ARCHIVE}" \
+            "${ARCHIVE}.sha256" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target "${GITHUB_SHA}" \
+            --title "OnkoFlow departmental v${APP_VERSION} (${SHORT_SHA})" \
+            --latest \
+            --notes "Statický departmental build OnkoFlow pro složku app. ZIP obsahuje pouze aplikaci; složka data ani pacientská data nejsou součástí balíčku."

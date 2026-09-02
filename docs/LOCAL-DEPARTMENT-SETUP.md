@@ -38,7 +38,29 @@ Ověřte na každé testovací stanici, že váš běžný nemocniční účet m
 Pokud selže už tento Windows test, nepokračujte. Jde o oprávnění SMB, nikoli o chybu
 OnkoFlow.
 
-## 2. Sestavte departmental build na osobním vývojovém počítači
+## 2. Stáhněte hotový ZIP v prohlížeči
+
+Na pracovní stanici není potřeba Git, Node.js ani PowerShell build:
+
+1. Otevřete
+   [nejnovější GitHub Release](https://github.com/AtecHEvolutioN/onkoflow-oncology-mockup/releases/latest).
+2. V části **Assets** stáhněte soubor
+   `OnkoFlow-department-vX.Y.Z-XXXXXXXXXXXX.zip`.
+3. Stáhněte také stejně pojmenovaný soubor s příponou `.sha256`.
+4. Rozbalte ZIP do dočasné složky. V jejím kořeni musí být `index.html` a složka
+   `_next`; nesmí tam být složka `data`.
+
+Volitelná kontrola integrity v PowerShellu:
+
+```powershell
+Get-FileHash .\OnkoFlow-department-vX.Y.Z-XXXXXXXXXXXX.zip -Algorithm SHA256
+Get-Content .\OnkoFlow-department-vX.Y.Z-XXXXXXXXXXXX.zip.sha256
+```
+
+Oba zobrazené SHA-256 otisky musí být stejné. Název obsahuje verzi aplikace a prvních
+12 znaků Git commitu, takže lze přesně dohledat nasazený build.
+
+### Náhradní postup: lokální sestavení
 
 Požadavky:
 
@@ -58,12 +80,21 @@ npm run lint
 npm run build:department
 ```
 
-Výsledkem je adresář `out`. Obsahuje statické HTML, CSS a JavaScript a nevyžaduje
-Node.js server.
+Výsledkem je adresář `out`. Obsahuje stejné statické HTML, CSS a JavaScript a
+nevyžaduje Node.js server.
 
 ## 3. Zkopírujte pouze aplikaci
 
-Z kořene repozitáře spusťte v PowerShellu:
+Z rozbaleného ZIPu zkopírujte jeho **obsah** do:
+
+```text
+\\share4.uvn.cz\gyn\OnkoFlow\app
+```
+
+Soubor `index.html` tedy musí skončit přímo jako
+`\\share4.uvn.cz\gyn\OnkoFlow\app\index.html`, ne v další vnořené složce.
+
+Pokud používáte náhradní lokální build, z kořene repozitáře spusťte v PowerShellu:
 
 ```powershell
 $AppTarget = "\\share4.uvn.cz\gyn\OnkoFlow\app"

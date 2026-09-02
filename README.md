@@ -31,7 +31,14 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Department storage proof-of-concept
 
-The repository now contains a separate static **department diagnostic build**:
+The preferred installation route for the static **department diagnostic build** is
+the browser-downloadable ZIP on the
+[latest GitHub Release](https://github.com/AtecHEvolutioN/onkoflow-oncology-mockup/releases/latest).
+GitHub Actions rebuilds and publishes a new, commit-labelled ZIP after every update
+to `main`. The ZIP contains only the contents intended for the departmental `app`
+folder; it never contains the separate `data` folder.
+
+The same build can be created locally as a fallback:
 
 ```bash
 npm run build:department
