@@ -68,22 +68,43 @@ export function getWorkflowAdvanceAction(patient: Patient): WorkflowAdvanceActio
           };
     case "Biopsie":
       return {
-        label: "Dokončit biopsii a pokračovat",
+        label: "Potvrdit provedení biopsie",
+        targetLabel: "Čekání na výsledek biopsie",
+        description: "Zaznamená výkon a ponechá pacienta ve sledování histologického výsledku.",
+      };
+    case "Čekání na výsledek biopsie":
+      return {
+        label: "Doplnit histologický výsledek",
         targetLabel: "Staging",
-        description: "Zaznamená původ biopsie a otevře stagingová vyšetření.",
+        description: "Uzavře čekání na histologii a otevře stagingová vyšetření.",
       };
     case "Staging":
       return {
-        label: "Dokončit staging a předat na MDT",
+        label: "Potvrdit stagingová vyšetření",
+        targetLabel: "Čekání na výsledky stagingu",
+        description: "Uloží provedená vyšetření a zahájí čekání na kompletní nálezy.",
+      };
+    case "Čekání na výsledky stagingu":
+      return {
+        label: "Potvrdit kompletní výsledky",
         targetLabel: "MDT",
-        description: "Uzavře staging a nastaví multidisciplinární rozhodnutí jako další krok.",
+        description: "Uzavře čekání na výsledky a připraví případ pro multidisciplinární tým.",
       };
     case "MDT":
       return {
         label: "Vybrat léčebnou větev",
-        targetLabel: "Rozhodnutí po MDT",
-        description: "Vyberte primární operaci, neoadjuvantní léčbu, nebo paliaci.",
+        targetLabel: "Čekání na zahájení léčby",
+        description:
+          "Uloží rozhodnutí multidisciplinárního týmu a zařadí pacienta k zahájení zvolené léčby.",
       };
+    case "Čekání na zahájení léčby":
+      return patient.treatmentRoute
+        ? {
+            label: "Potvrdit zahájení léčby",
+            targetLabel: patient.treatmentRoute,
+            description: `Potvrdí skutečné zahájení léčebné větve ${patient.treatmentRoute}.`,
+          }
+        : null;
     case "Neoadjuvantní léčba":
       return {
         label: "Předat k operační léčbě",
@@ -141,18 +162,50 @@ function getWorkflowTransitionPlan(
       const external = input.biopsyStatus === "Provedena externě";
       if (
         !input.biopsyResult?.date ||
+        !input.biopsyResult.facility.trim()
+      ) {
+        return null;
+      }
+      return {
+        nextPhase: "Čekání na výsledek biopsie",
+        progress: 30,
+        nextStep: "Doplnit histologický výsledek",
+        nextStepDelayDays: 7,
+        eventKind: "pathology",
+        eventTitle: external ? "Externí biopsie provedena" : "Biopsie provedena v ÚVN",
+        eventDescription: `Biopsie byla provedena na pracovišti ${input.biopsyResult.facility}${
+          input.biopsyResult.reportReference
+            ? ` Reference nálezu: ${input.biopsyResult.reportReference}.`
+            : "."
+        } Čeká se na histologický výsledek.`,
+        changes: {
+          biopsyStatus: input.biopsyStatus,
+          biopsyResult: {
+            ...input.biopsyResult,
+            conclusion: "",
+          },
+        },
+      };
+    }
+    case "Čekání na výsledek biopsie": {
+      if (
+        !input.biopsyStatus ||
+        !input.biopsyResult?.date ||
         !input.biopsyResult.facility.trim() ||
         !input.biopsyResult.conclusion.trim()
       ) {
         return null;
       }
+      const external = input.biopsyStatus === "Provedena externě";
       return {
         nextPhase: "Staging",
         progress: 40,
         nextStep: "Dokončit stagingová vyšetření",
         nextStepDelayDays: 7,
         eventKind: "pathology",
-        eventTitle: external ? "Externí biopsie doložena" : "Biopsie dokončena v ÚVN",
+        eventTitle: external
+          ? "Externí histologický výsledek doplněn"
+          : "Histologický výsledek z ÚVN doplněn",
         eventDescription: `${input.biopsyResult.facility}: ${input.biopsyResult.conclusion}${
           input.biopsyResult.reportReference
             ? ` Reference nálezu: ${input.biopsyResult.reportReference}.`
@@ -171,20 +224,31 @@ function getWorkflowTransitionPlan(
       );
       if (examinations.length === 0) return null;
       return {
-        nextPhase: "MDT",
-        progress: 65,
-        nextStep: "Prezentace na MDT",
+        nextPhase: "Čekání na výsledky stagingu",
+        progress: 52,
+        nextStep: "Zkontrolovat výsledky stagingu",
         nextStepDelayDays: 7,
         eventKind: "imaging",
-        eventTitle: "Staging dokončen",
-        eventDescription: `Stagingová vyšetření byla uzavřena: ${examinations.join(
+        eventTitle: "Stagingová vyšetření provedena",
+        eventDescription: `Byla provedena stagingová vyšetření: ${examinations.join(
           ", ",
-        )}. Případ je připraven k prezentaci na MDT.`,
+        )}. Čeká se na kompletaci výsledků.`,
         changes: {
           stagingExaminations: examinations,
         },
       };
     }
+    case "Čekání na výsledky stagingu":
+      return {
+        nextPhase: "MDT",
+        progress: 65,
+        nextStep: "Prezentace na MDT",
+        nextStepDelayDays: 7,
+        eventKind: "imaging",
+        eventTitle: "Výsledky stagingu kompletní",
+        eventDescription:
+          "Výsledky stagingových vyšetření jsou kompletní. Případ je připraven k prezentaci na multidisciplinárním týmu.",
+      };
     case "MDT": {
       if (!input.treatmentRoute) return null;
       const routeDetails: Record<
@@ -210,8 +274,8 @@ function getWorkflowTransitionPlan(
       };
       const details = routeDetails[input.treatmentRoute];
       return {
-        nextPhase: input.treatmentRoute,
-        progress: 80,
+        nextPhase: "Čekání na zahájení léčby",
+        progress: 75,
         nextStep: details.nextStep,
         nextStepDelayDays: details.nextStepDelayDays,
         eventKind: "mdt",
@@ -222,6 +286,45 @@ function getWorkflowTransitionPlan(
           treatmentRoute: input.treatmentRoute,
           treatmentSite: null,
         },
+      };
+    }
+    case "Čekání na zahájení léčby": {
+      if (!patient.treatmentRoute) return null;
+      const treatmentStart: Record<
+        TreatmentRoute,
+        Pick<
+          WorkflowTransitionPlan,
+          "nextStep" | "nextStepDelayDays" | "eventKind" | "eventDescription"
+        >
+      > = {
+        "Primární operace": {
+          nextStep: "Dokončit operační léčbu",
+          nextStepDelayDays: 14,
+          eventKind: "surgery",
+          eventDescription: "Byla zahájena větev primární operační léčby.",
+        },
+        "Neoadjuvantní léčba": {
+          nextStep: "Dokončit neoadjuvantní léčbu",
+          nextStepDelayDays: 42,
+          eventKind: "systemic",
+          eventDescription: "Byla zahájena neoadjuvantní léčba.",
+        },
+        Paliace: {
+          nextStep: "Pokračovat v paliativním plánu",
+          nextStepDelayDays: 30,
+          eventKind: "followup",
+          eventDescription: "Byl zahájen individuální plán paliativní péče.",
+        },
+      };
+      const details = treatmentStart[patient.treatmentRoute];
+      return {
+        nextPhase: patient.treatmentRoute,
+        progress: 80,
+        nextStep: details.nextStep,
+        nextStepDelayDays: details.nextStepDelayDays,
+        eventKind: details.eventKind,
+        eventTitle: `Léčba zahájena — ${patient.treatmentRoute}`,
+        eventDescription: details.eventDescription,
       };
     }
     case "Neoadjuvantní léčba":

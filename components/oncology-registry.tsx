@@ -222,8 +222,11 @@ function maskBirthNumber(value: string) {
 const phaseStyleIndex: Record<CarePhase, number> = {
   Příjem: 1,
   Biopsie: 1,
+  "Čekání na výsledek biopsie": 1,
   Staging: 2,
+  "Čekání na výsledky stagingu": 2,
   MDT: 3,
+  "Čekání na zahájení léčby": 3,
   "Primární operace": 4,
   "Neoadjuvantní léčba": 4,
   Paliace: 4,
@@ -232,7 +235,16 @@ const phaseStyleIndex: Record<CarePhase, number> = {
 };
 
 function PhaseBadge({ phase }: { phase: CarePhase }) {
-  return <span className={`phase-badge phase-${phaseStyleIndex[phase]}`}>{phase}</span>;
+  const waiting = phase.startsWith("Čekání");
+  return (
+    <span
+      className={`phase-badge phase-${phaseStyleIndex[phase]} ${
+        waiting ? "phase-badge-waiting" : ""
+      }`}
+    >
+      {phase}
+    </span>
+  );
 }
 
 function PatientPathway({ patient }: { patient: Patient }) {
@@ -249,16 +261,27 @@ function PatientPathway({ patient }: { patient: Patient }) {
 
           if (step.phase === "Příjem") detail = formatDate(patient.intakeDate);
           if (step.phase === "Biopsie") detail = patient.biopsyStatus;
+          if (step.phase === "Čekání na výsledek biopsie") {
+            detail = patient.biopsyResult?.facility || "Histologický nález se zpracovává";
+          }
           if (step.phase === "Staging" && patient.stagingExaminations.length > 0) {
             detail = patient.stagingExaminations.join(" · ");
+          }
+          if (step.phase === "Čekání na výsledky stagingu") {
+            detail = patient.stagingExaminations.join(" · ") || "Kompletace nálezů";
           }
           if (step.phase === "MDT") {
             detail = patient.mdtDate ? formatDate(patient.mdtDate) : "Datum zatím neurčeno";
           }
+          if (step.phase === "Čekání na zahájení léčby") {
+            detail = patient.treatmentRoute ?? "Léčebná větev zatím neurčena";
+          }
 
           return (
             <div
-              className={`pathway-step ${completed ? "completed" : ""} ${active ? "current" : ""}`}
+              className={`pathway-step ${step.kind === "waiting" ? "waiting" : ""} ${
+                completed ? "completed" : ""
+              } ${active ? "current" : ""}`}
               key={step.phase}
             >
               <div className="pathway-node">
@@ -825,7 +848,9 @@ function DashboardView({
         <div className="panel-header">
           <div>
             <h2>Proces onkologické péče</h2>
-            <p>Příjem, histologická verifikace, staging, MDT a navazující léčebná větev.</p>
+            <p>
+              Hlavní fáze a čekací stavy před histologií, MDT a zahájením léčby.
+            </p>
           </div>
           <span className="panel-meta">Aktualizováno právě teď</span>
         </div>
@@ -834,16 +859,17 @@ function DashboardView({
             const count = patients.filter((patient) => step.phases.includes(patient.phase)).length;
             return (
               <button
-                className="phase-summary"
+                className={`phase-summary ${step.kind === "waiting" ? "waiting" : ""}`}
                 type="button"
                 key={step.number}
                 onClick={() => navigate("patients")}
               >
-                <span className={`phase-number phase-number-${step.number}`}>
+                <span className={`phase-number phase-number-${step.tone}`}>
                   {step.number}
                 </span>
                 <div>
                   <strong>{step.label}</strong>
+                  {step.description ? <small>{step.description}</small> : null}
                   <span>{count} pacientů</span>
                 </div>
                 <div className="phase-bar">
@@ -1182,14 +1208,19 @@ function PatientDetail({
                   </span>
                   <div>
                     <span>
-                      {patient.biopsyStatus === "Provedena v ÚVN"
-                        ? "Výsledek biopsie z ÚVN"
-                        : "Výsledek externí biopsie"}
+                      {patient.phase === "Čekání na výsledek biopsie"
+                        ? "Biopsie provedena — čeká se na výsledek"
+                        : patient.biopsyStatus === "Provedena v ÚVN"
+                          ? "Výsledek biopsie z ÚVN"
+                          : "Výsledek externí biopsie"}
                     </span>
                     <strong>{patient.biopsyResult.facility}</strong>
                   </div>
                 </div>
-                <p>{patient.biopsyResult.conclusion}</p>
+                <p>
+                  {patient.biopsyResult.conclusion ||
+                    "Histologický závěr zatím není k dispozici."}
+                </p>
                 <div className="external-biopsy-result-meta">
                   <span>
                     Datum odběru / výkonu:{" "}
@@ -1210,7 +1241,11 @@ function PatientDetail({
                     <ScanLine size={18} aria-hidden="true" />
                   </span>
                   <div>
-                    <span>Dokončený staging</span>
+                    <span>
+                      {patient.phase === "Čekání na výsledky stagingu"
+                        ? "Čekání na výsledky stagingu"
+                        : "Dokončený staging"}
+                    </span>
                     <strong>Provedená vyšetření</strong>
                   </div>
                 </div>
@@ -1916,11 +1951,21 @@ function AdvancePatientModal({
   const dialogRef = useRef<HTMLElement>(null);
   const [date, setDate] = useState("2026-09-02");
   const [note, setNote] = useState("");
-  const [biopsyStatus, setBiopsyStatus] = useState<CompletedBiopsyStatus | null>(null);
-  const [biopsyDate, setBiopsyDate] = useState("2026-09-02");
-  const [biopsyFacility, setBiopsyFacility] = useState("");
-  const [biopsyReference, setBiopsyReference] = useState("");
-  const [biopsyConclusion, setBiopsyConclusion] = useState("");
+  const [biopsyStatus, setBiopsyStatus] = useState<CompletedBiopsyStatus | null>(() =>
+    patient.biopsyStatus === "Nutno provést" ? null : patient.biopsyStatus,
+  );
+  const [biopsyDate, setBiopsyDate] = useState(
+    patient.biopsyResult?.date ?? "2026-09-02",
+  );
+  const [biopsyFacility, setBiopsyFacility] = useState(
+    patient.biopsyResult?.facility ?? "",
+  );
+  const [biopsyReference, setBiopsyReference] = useState(
+    patient.biopsyResult?.reportReference ?? "",
+  );
+  const [biopsyConclusion, setBiopsyConclusion] = useState(
+    patient.biopsyResult?.conclusion ?? "",
+  );
   const [stagingChoices, setStagingChoices] = useState<string[]>(() =>
     Array.from(
       new Set([...standardStagingExaminations, ...patient.stagingExaminations]),
@@ -1948,7 +1993,10 @@ function AdvancePatientModal({
 
   if (!action) return null;
 
-  const targetLabel = treatmentRoute ?? action.targetLabel;
+  const targetLabel = action.targetLabel;
+  const isBiopsyProcedure = patient.phase === "Biopsie";
+  const isWaitingForBiopsyResult = patient.phase === "Čekání na výsledek biopsie";
+  const isBiopsyWorkflow = isBiopsyProcedure || isWaitingForBiopsyResult;
 
   const toggleStagingExamination = (examination: string) => {
     setSelectedStagingExaminations((current) =>
@@ -1987,20 +2035,21 @@ function AdvancePatientModal({
       setFormError("Doplňte datum dokončení aktuální fáze.");
       return;
     }
-    if (patient.phase === "Biopsie" && !biopsyStatus) {
+    if (isBiopsyWorkflow && !biopsyStatus) {
       setFormError("Vyberte, kde byla biopsie provedena.");
       return;
     }
     if (
-      patient.phase === "Biopsie" &&
+      isBiopsyWorkflow &&
       biopsyStatus &&
       (!biopsyDate ||
-        !biopsyConclusion.trim() ||
         (biopsyStatus === "Provedena externě" && !biopsyFacility.trim()))
     ) {
-      setFormError(
-        "U provedené biopsie vyplňte datum, pracoviště a závěr histologického nálezu.",
-      );
+      setFormError("U provedené biopsie vyplňte datum a pracoviště.");
+      return;
+    }
+    if (isWaitingForBiopsyResult && !biopsyConclusion.trim()) {
+      setFormError("Doplňte závěr histologického nálezu.");
       return;
     }
     if (patient.phase === "Staging" && selectedStagingExaminations.length === 0) {
@@ -2017,7 +2066,7 @@ function AdvancePatientModal({
       note,
       biopsyStatus,
       biopsyResult:
-        patient.phase === "Biopsie" && biopsyStatus
+        isBiopsyWorkflow && biopsyStatus
           ? {
               date: biopsyDate,
               facility:
@@ -2025,7 +2074,7 @@ function AdvancePatientModal({
                   ? "ÚVN Praha"
                   : biopsyFacility.trim(),
               reportReference: biopsyReference.trim(),
-              conclusion: biopsyConclusion.trim(),
+              conclusion: isWaitingForBiopsyResult ? biopsyConclusion.trim() : "",
             }
           : null,
       stagingExaminations: selectedStagingExaminations,
@@ -2073,10 +2122,16 @@ function AdvancePatientModal({
           </div>
           <p className="advance-description">{action.description}</p>
 
-          {patient.phase === "Biopsie" ? (
+          {isBiopsyWorkflow ? (
             <fieldset className="biopsy-choice advance-choice">
-              <legend>Dokončená biopsie *</legend>
-              <p>Vyberte původ histologického výsledku, který posun do stagingu dokládá.</p>
+              <legend>
+                {isBiopsyProcedure ? "Provedená biopsie *" : "Histologický výsledek *"}
+              </legend>
+              <p>
+                {isBiopsyProcedure
+                  ? "Zaznamenejte výkon. Pacient se přesune do čekání na histologický výsledek."
+                  : "Doplňte obdržený histologický závěr a pokračujte do stagingu."}
+              </p>
               <div className="biopsy-choice-grid two-options">
                 {(
                   [
@@ -2119,11 +2174,17 @@ function AdvancePatientModal({
                   <div className="external-biopsy-heading">
                     <div>
                       <strong>
-                        {biopsyStatus === "Provedena v ÚVN"
-                          ? "Výsledek biopsie z ÚVN"
-                          : "Výsledek externí biopsie"}
+                        {isBiopsyProcedure
+                          ? "Údaje o provedené biopsii"
+                          : biopsyStatus === "Provedena v ÚVN"
+                            ? "Výsledek biopsie z ÚVN"
+                            : "Výsledek externí biopsie"}
                       </strong>
-                      <small>Reference nálezu je volitelná.</small>
+                      <small>
+                        {isBiopsyProcedure
+                          ? "Histologický závěr doplníte po obdržení výsledku."
+                          : "Reference nálezu je volitelná."}
+                      </small>
                     </div>
                     <Microscope size={19} aria-hidden="true" />
                   </div>
@@ -2159,16 +2220,18 @@ function AdvancePatientModal({
                         placeholder="Číslo biopsie / histologického nálezu"
                       />
                     </label>
-                    <label className="form-field full-column">
-                      <span>Závěr histologického nálezu *</span>
-                      <textarea
-                        value={biopsyConclusion}
-                        onChange={(event) => setBiopsyConclusion(event.target.value)}
-                        rows={4}
-                        placeholder="Stručný závěr histologického nálezu…"
-                        required
-                      />
-                    </label>
+                    {isWaitingForBiopsyResult ? (
+                      <label className="form-field full-column">
+                        <span>Závěr histologického nálezu *</span>
+                        <textarea
+                          value={biopsyConclusion}
+                          onChange={(event) => setBiopsyConclusion(event.target.value)}
+                          rows={4}
+                          placeholder="Stručný závěr histologického nálezu…"
+                          required
+                        />
+                      </label>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
@@ -2291,6 +2354,7 @@ function AdvancePatientModal({
                 required
                 autoFocus={
                   patient.phase !== "Biopsie" &&
+                  patient.phase !== "Čekání na výsledek biopsie" &&
                   patient.phase !== "Staging" &&
                   patient.phase !== "MDT"
                 }

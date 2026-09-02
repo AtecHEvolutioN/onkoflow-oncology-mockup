@@ -9,7 +9,7 @@ Interactive Czech-language mockup for tracking patients through an oncologic car
 - upcoming and overdue tasks;
 - an audit-log concept;
 - a working **Přijetí pacienta do péče** form with Czech birth-number date parsing and MKN-10 selection;
-- the clinical pathway **Příjem → Biopsie → Staging → MDT**, followed by primary surgery, neoadjuvant treatment with subsequent surgery, or palliation;
+- the clinical pathway **Příjem → Biopsie → čekání na histologii → Staging → čekání na výsledky → MDT → čekání na zahájení léčby**, followed by primary surgery, neoadjuvant treatment with subsequent surgery, or palliation;
 - guided one-action phase transitions that update the patient state, next task, progress, and clinical timeline together;
 - biopsy-origin recording so a biopsy already completed at ÚVN or externally is not repeated;
 - structured biopsy results from ÚVN or an external facility (date, workplace, report reference, and conclusion);

@@ -4,12 +4,22 @@ export type CoreCarePhase =
   | "Staging"
   | "MDT";
 
+export type WaitingCarePhase =
+  | "Čekání na výsledek biopsie"
+  | "Čekání na výsledky stagingu"
+  | "Čekání na zahájení léčby";
+
 export type TreatmentRoute =
   | "Primární operace"
   | "Neoadjuvantní léčba"
   | "Paliace";
 
-export type CarePhase = CoreCarePhase | TreatmentRoute | "Sledování" | "Recidiva";
+export type CarePhase =
+  | CoreCarePhase
+  | WaitingCarePhase
+  | TreatmentRoute
+  | "Sledování"
+  | "Recidiva";
 
 export type BiopsyStatus =
   | "Nutno provést"
@@ -489,14 +499,33 @@ export const demoAuditEvents = [
 ];
 
 export const corePathwaySteps: Array<{
-  phase: CoreCarePhase;
-  number: number;
+  phase: CoreCarePhase | WaitingCarePhase;
+  number: string;
   detail: string;
+  kind: "phase" | "waiting";
 }> = [
-  { phase: "Příjem", number: 1, detail: "RČ · diagnóza · datum" },
-  { phase: "Biopsie", number: 2, detail: "ÚVN / externí" },
-  { phase: "Staging", number: 3, detail: "CT · MRI · PET/CT · TM" },
-  { phase: "MDT", number: 4, detail: "datum · rozhodnutí" },
+  { phase: "Příjem", number: "1", detail: "RČ · diagnóza · datum", kind: "phase" },
+  { phase: "Biopsie", number: "2", detail: "ÚVN / externí", kind: "phase" },
+  {
+    phase: "Čekání na výsledek biopsie",
+    number: "2a",
+    detail: "histologický nález",
+    kind: "waiting",
+  },
+  { phase: "Staging", number: "3", detail: "CT · MRI · PET/CT · TM", kind: "phase" },
+  {
+    phase: "Čekání na výsledky stagingu",
+    number: "3a",
+    detail: "kompletace nálezů",
+    kind: "waiting",
+  },
+  { phase: "MDT", number: "4", detail: "multidisciplinární tým", kind: "phase" },
+  {
+    phase: "Čekání na zahájení léčby",
+    number: "4a",
+    detail: "termín podle rozhodnutí MDT",
+    kind: "waiting",
+  },
 ];
 
 export const treatmentRoutes: Array<{
@@ -526,18 +555,51 @@ export const treatmentRoutes: Array<{
 ];
 
 export const processSummarySteps: Array<{
-  number: number;
+  number: string;
   label: string;
+  description?: string;
   phases: CarePhase[];
+  tone: 1 | 2 | 3 | 4 | 5 | 6;
+  kind: "phase" | "waiting";
 }> = [
-  { number: 1, label: "Příjem", phases: ["Příjem"] },
-  { number: 2, label: "Biopsie", phases: ["Biopsie"] },
-  { number: 3, label: "Staging", phases: ["Staging"] },
-  { number: 4, label: "MDT", phases: ["MDT"] },
+  { number: "1", label: "Příjem", phases: ["Příjem"], tone: 1, kind: "phase" },
+  { number: "2", label: "Biopsie", phases: ["Biopsie"], tone: 2, kind: "phase" },
   {
-    number: 5,
+    number: "2a",
+    label: "Čekání na výsledek biopsie",
+    phases: ["Čekání na výsledek biopsie"],
+    tone: 2,
+    kind: "waiting",
+  },
+  { number: "3", label: "Staging", phases: ["Staging"], tone: 3, kind: "phase" },
+  {
+    number: "3a",
+    label: "Čekání na výsledky stagingu",
+    phases: ["Čekání na výsledky stagingu"],
+    tone: 3,
+    kind: "waiting",
+  },
+  {
+    number: "4",
+    label: "MDT",
+    description: "Multidisciplinární tým",
+    phases: ["MDT"],
+    tone: 4,
+    kind: "phase",
+  },
+  {
+    number: "4a",
+    label: "Čekání na zahájení léčby",
+    phases: ["Čekání na zahájení léčby"],
+    tone: 4,
+    kind: "waiting",
+  },
+  {
+    number: "5",
     label: "Léčebná větev",
     phases: ["Primární operace", "Neoadjuvantní léčba", "Paliace", "Sledování"],
+    tone: 5,
+    kind: "phase",
   },
-  { number: 6, label: "Recidiva", phases: ["Recidiva"] },
+  { number: "6", label: "Recidiva", phases: ["Recidiva"], tone: 6, kind: "phase" },
 ];
