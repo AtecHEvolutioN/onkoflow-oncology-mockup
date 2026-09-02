@@ -4,6 +4,7 @@ Interactive Czech-language mockup for tracking patients through an oncologic car
 
 - a clinical operations dashboard;
 - searchable synthetic patient records;
+- responsive, touch-friendly desktop and mobile workflows;
 - a chronological care timeline;
 - upcoming and overdue tasks;
 - an audit-log concept;

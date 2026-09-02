@@ -5,7 +5,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
-  Bell,
   CalendarDays,
   Check,
   ChevronRight,
@@ -320,6 +319,10 @@ export function OncologyRegistry() {
 
   const selectedPatient =
     patients.find((patient) => patient.id === selectedPatientId) ?? patients[0];
+  const currentViewLabel =
+    activeView === "patient"
+      ? "Detail pacienta"
+      : (navItems.find((item) => item.id === activeView)?.label ?? "Přehled");
 
   useEffect(() => {
     if (!toast) return;
@@ -404,10 +407,11 @@ export function OncologyRegistry() {
                 key={item.id}
                 type="button"
                 onClick={() => navigate(item.id)}
+                aria-current={active ? "page" : undefined}
               >
                 <Icon size={19} aria-hidden="true" />
                 <span>{item.label}</span>
-                {item.id === "tasks" && <span className="nav-count">4</span>}
+                {item.id === "tasks" ? <span className="nav-count">4</span> : null}
               </button>
             );
           })}
@@ -446,8 +450,7 @@ export function OncologyRegistry() {
         <div className="demo-banner" role="status">
           <AlertTriangle size={16} aria-hidden="true" />
           <span>
-            <strong>Interaktivní mockup.</strong> Používejte pouze smyšlené údaje — nic se
-            neukládá na server.
+            <strong>Demo.</strong> Používejte pouze smyšlené údaje — nic se neukládá.
           </span>
         </div>
 
@@ -461,25 +464,18 @@ export function OncologyRegistry() {
             <Menu size={21} />
           </button>
           <div className="topbar-location">
-            <span>Onkologické centrum</span>
-            <strong>Gynekologická onkologie</strong>
+            <span>Gynekologická onkologie</span>
+            <strong>{currentViewLabel}</strong>
           </div>
           <div className="topbar-actions">
-            <div className="system-status">
-              <span className="status-dot" />
-              Demo režim
-            </div>
-            <button className="icon-button notification-button" type="button" aria-label="Oznámení">
-              <Bell size={20} />
-              <span className="notification-dot" />
-            </button>
             <button
               className="button button-primary topbar-new"
               type="button"
+              aria-label="Přijmout nového pacienta"
               onClick={() => setIsNewPatientOpen(true)}
             >
               <Plus size={18} aria-hidden="true" />
-              Nový pacient
+              <span className="topbar-new-label">Nový pacient</span>
             </button>
           </div>
         </header>
@@ -508,6 +504,32 @@ export function OncologyRegistry() {
           {activeView === "audit" && <AuditView />}
         </section>
       </main>
+
+      <nav className="mobile-nav" aria-label="Mobilní navigace">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const active =
+            activeView === item.id || (item.id === "patients" && activeView === "patient");
+          return (
+            <button
+              className={`mobile-nav-item ${active ? "active" : ""}`}
+              key={item.id}
+              type="button"
+              onClick={() => navigate(item.id)}
+              aria-current={active ? "page" : undefined}
+              aria-label={item.label}
+            >
+              <span className="mobile-nav-icon">
+                <Icon size={20} aria-hidden="true" />
+                {item.id === "tasks" ? <span className="mobile-nav-count">4</span> : null}
+              </span>
+              <span>
+                {item.id === "tasks" ? "Úkoly" : item.id === "audit" ? "Audit" : item.label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
 
       {isNewPatientOpen && (
         <NewPatientModal onClose={() => setIsNewPatientOpen(false)} onCreate={createPatient} />
@@ -811,8 +833,9 @@ function PatientsView({
         </div>
 
         {filteredPatients.length ? (
-          <div className="patient-table-wrap">
-            <table className="patient-table">
+          <>
+            <div className="patient-table-wrap">
+              <table className="patient-table">
               <thead>
                 <tr>
                   <th>Pacient</th>
@@ -873,8 +896,44 @@ function PatientsView({
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+            <div className="patient-mobile-list">
+              {filteredPatients.map((patient) => (
+                <button
+                  className="patient-mobile-card"
+                  key={patient.id}
+                  type="button"
+                  onClick={() => openPatient(patient.id)}
+                >
+                  <div className="patient-mobile-identity">
+                    <div className="avatar">{patient.initials}</div>
+                    <div>
+                      <strong>
+                        {patient.firstName} {patient.lastName}
+                      </strong>
+                      <span>
+                        {calculateAge(patient.dateOfBirth)} let · {patient.birthNumberMasked}
+                      </span>
+                    </div>
+                    <ChevronRight size={20} aria-hidden="true" />
+                  </div>
+                  <div className="patient-mobile-diagnosis">
+                    <span>{patient.primaryDiagnosisCode}</span>
+                    <strong>{patient.primaryDiagnosisLabel}</strong>
+                    <PhaseBadge phase={patient.phase} />
+                  </div>
+                  <div className="patient-mobile-next">
+                    <div>
+                      <span>Další krok</span>
+                      <strong>{patient.nextStep}</strong>
+                    </div>
+                    <time dateTime={patient.nextStepDate}>{formatDate(patient.nextStepDate)}</time>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </>
         ) : (
           <EmptyState
             title="Žádný pacient neodpovídá filtru"
@@ -929,6 +988,17 @@ function PatientDetail({
             <Plus size={18} aria-hidden="true" />
             Přidat událost
           </button>
+        </div>
+      </section>
+
+      <section className="mobile-next-action panel" aria-label="Nejbližší krok">
+        <span className="mobile-next-action-icon">
+          <CalendarDays size={20} aria-hidden="true" />
+        </span>
+        <div>
+          <span>Nejbližší krok</span>
+          <strong>{patient.nextStep}</strong>
+          <time dateTime={patient.nextStepDate}>{formatLongDate(patient.nextStepDate)}</time>
         </div>
       </section>
 
@@ -1007,7 +1077,12 @@ function PatientDetail({
                 <p className="eyebrow">Chronologický záznam</p>
                 <h2>Časová osa</h2>
               </div>
-              <button className="button button-soft" type="button" onClick={openNewEvent}>
+              <button
+                className="button button-soft"
+                type="button"
+                aria-label="Přidat událost"
+                onClick={openNewEvent}
+              >
                 <Plus size={17} aria-hidden="true" />
                 Nová událost
               </button>
