@@ -14,6 +14,7 @@ import {
   Eye,
   FileCheck2,
   FilePlus2,
+  HardDrive,
   HeartPulse,
   History,
   LayoutDashboard,
@@ -32,6 +33,8 @@ import {
   X,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { StorageDiagnostics } from "@/components/storage-diagnostics";
+import { isDepartmentMode } from "@/lib/build-info";
 import {
   BiopsyStatus,
   CareTask,
@@ -55,7 +58,7 @@ import {
 } from "@/lib/workflow";
 import type { CompletedBiopsyStatus, WorkflowAdvanceInput } from "@/lib/workflow";
 
-type View = "dashboard" | "patients" | "patient" | "tasks" | "audit";
+type View = "dashboard" | "patients" | "patient" | "tasks" | "audit" | "storage";
 
 type BirthNumberResult = {
   date: string;
@@ -73,6 +76,7 @@ const navItems: Array<{
   { id: "dashboard", label: "Přehled", icon: LayoutDashboard },
   { id: "patients", label: "Pacienti", icon: Users },
   { id: "tasks", label: "Úkoly a termíny", icon: ListChecks },
+  { id: "storage", label: "Datové úložiště", icon: HardDrive },
   { id: "audit", label: "Auditní stopa", icon: History },
 ];
 
@@ -347,7 +351,9 @@ function EmptyState({
 export function OncologyRegistry() {
   const [patients, setPatients] = useState<Patient[]>(initialPatients);
   const [tasks, setTasks] = useState<CareTask[]>(demoTasks);
-  const [activeView, setActiveView] = useState<View>("dashboard");
+  const [activeView, setActiveView] = useState<View>(() =>
+    isDepartmentMode ? "storage" : "dashboard",
+  );
   const [selectedPatientId, setSelectedPatientId] = useState(initialPatients[0].id);
   const [searchQuery, setSearchQuery] = useState("");
   const [isNewPatientOpen, setIsNewPatientOpen] = useState(false);
@@ -499,8 +505,12 @@ export function OncologyRegistry() {
         <div className="security-card">
           <ShieldCheck size={20} aria-hidden="true" />
           <div>
-            <strong>Demo prostředí</strong>
-            <span>Bez napojení na databázi</span>
+            <strong>{isDepartmentMode ? "Department POC" : "Demo prostředí"}</strong>
+            <span>
+              {isDepartmentMode
+                ? "Klinické ukládání je vypnuto"
+                : "Bez napojení na databázi"}
+            </span>
           </div>
         </div>
 
@@ -527,7 +537,10 @@ export function OncologyRegistry() {
         <div className="demo-banner" role="status">
           <AlertTriangle size={16} aria-hidden="true" />
           <span>
-            <strong>Demo.</strong> Používejte pouze smyšlené údaje — nic se neukládá.
+            <strong>{isDepartmentMode ? "Diagnostická verze." : "Demo."}</strong>{" "}
+            {isDepartmentMode
+              ? "Pacientská evidence stále používá pouze smyšlená data a neukládá je na disk."
+              : "Používejte pouze smyšlené údaje — nic se neukládá."}
           </span>
         </div>
 
@@ -545,15 +558,17 @@ export function OncologyRegistry() {
             <strong>{currentViewLabel}</strong>
           </div>
           <div className="topbar-actions">
-            <button
-              className="button button-primary topbar-new"
-              type="button"
-              aria-label="Přijmout nového pacienta"
-              onClick={() => setIsNewPatientOpen(true)}
-            >
-              <Plus size={18} aria-hidden="true" />
-              <span className="topbar-new-label">Nový pacient</span>
-            </button>
+            {!isDepartmentMode ? (
+              <button
+                className="button button-primary topbar-new"
+                type="button"
+                aria-label="Přijmout nového pacienta"
+                onClick={() => setIsNewPatientOpen(true)}
+              >
+                <Plus size={18} aria-hidden="true" />
+                <span className="topbar-new-label">Nový pacient</span>
+              </button>
+            ) : null}
           </div>
         </header>
 
@@ -573,6 +588,7 @@ export function OncologyRegistry() {
               setQuery={setSearchQuery}
               openPatient={openPatient}
               openNewPatient={() => setIsNewPatientOpen(true)}
+              allowPatientCreation={!isDepartmentMode}
             />
           )}
           {activeView === "patient" && selectedPatient && (
@@ -584,6 +600,7 @@ export function OncologyRegistry() {
             />
           )}
           {activeView === "tasks" && <TasksView tasks={tasks} openPatient={openPatient} />}
+          {activeView === "storage" && <StorageDiagnostics />}
           {activeView === "audit" && <AuditView />}
         </section>
       </main>
@@ -609,14 +626,20 @@ export function OncologyRegistry() {
                 ) : null}
               </span>
               <span>
-                {item.id === "tasks" ? "Úkoly" : item.id === "audit" ? "Audit" : item.label}
+                {item.id === "tasks"
+                  ? "Úkoly"
+                  : item.id === "audit"
+                    ? "Audit"
+                    : item.id === "storage"
+                      ? "Úložiště"
+                      : item.label}
               </span>
             </button>
           );
         })}
       </nav>
 
-      {isNewPatientOpen && (
+      {isNewPatientOpen && !isDepartmentMode && (
         <NewPatientModal onClose={() => setIsNewPatientOpen(false)} onCreate={createPatient} />
       )}
 
@@ -872,12 +895,14 @@ function PatientsView({
   setQuery,
   openPatient,
   openNewPatient,
+  allowPatientCreation,
 }: {
   patients: Patient[];
   query: string;
   setQuery: (value: string) => void;
   openPatient: (id: string) => void;
   openNewPatient: () => void;
+  allowPatientCreation: boolean;
 }) {
   const filteredPatients = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("cs-CZ");
@@ -904,10 +929,12 @@ function PatientsView({
           <h1>Pacienti</h1>
           <p>Aktivní onkologické epizody a jejich aktuální fáze.</p>
         </div>
-        <button className="button button-primary" type="button" onClick={openNewPatient}>
-          <Plus size={18} aria-hidden="true" />
-          Přijmout pacienta do péče
-        </button>
+        {allowPatientCreation ? (
+          <button className="button button-primary" type="button" onClick={openNewPatient}>
+            <Plus size={18} aria-hidden="true" />
+            Přijmout pacienta do péče
+          </button>
+        ) : null}
       </div>
 
       <section className="panel patient-directory">

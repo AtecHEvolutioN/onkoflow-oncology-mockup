@@ -3219,7 +3219,7 @@ p {
     left: 0;
     display: grid;
     min-height: calc(64px + env(safe-area-inset-bottom));
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     padding: 4px 6px env(safe-area-inset-bottom);
     border-top: 1px solid var(--line);
     background: rgb(255 255 255 / 0.97);
@@ -4331,6 +4331,402 @@ p {
   line-height: 1.4;
 }
 
+.storage-page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.storage-mode-chip {
+  display: inline-flex;
+  min-height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 11px;
+  border: 1px solid #b9d5d1;
+  border-radius: 999px;
+  color: var(--teal-dark);
+  background: var(--teal-soft);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+}
+
+.storage-mode-chip.department {
+  border-color: #e5c581;
+  color: #795817;
+  background: #fff9e8;
+}
+
+.storage-build-panel {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 15px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+
+.storage-build-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 11px;
+  color: var(--teal-dark);
+  background: var(--teal-soft);
+}
+
+.storage-build-panel dl {
+  display: grid;
+  grid-template-columns: 1.15fr 0.7fr 1fr 1.2fr;
+  gap: 18px;
+  margin: 0;
+}
+
+.storage-build-panel dl > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.storage-build-panel dt {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.storage-build-panel dd {
+  overflow: hidden;
+  margin: 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.storage-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.75fr) minmax(240px, 0.75fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.storage-connection-panel,
+.storage-safety-panel,
+.diagnostics-panel {
+  min-width: 0;
+  padding: 18px;
+}
+
+.connection-state {
+  display: inline-flex;
+  min-height: 27px;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  color: var(--muted-strong);
+  background: var(--surface-soft);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.connection-state.state-connected {
+  color: var(--teal-dark);
+  background: var(--teal-soft);
+}
+
+.connection-state.state-needs-permission,
+.connection-state.state-error,
+.connection-state.state-unsupported {
+  color: #874a11;
+  background: #fff2dc;
+}
+
+.storage-capabilities {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 15px;
+}
+
+.storage-capabilities > div {
+  display: flex;
+  min-width: 0;
+  min-height: 57px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 9px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: var(--surface-soft);
+}
+
+.storage-capabilities span,
+.selected-directory span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.storage-capabilities strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-directory {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-top: 12px;
+  border: 1px solid #cfe0dd;
+  border-radius: 10px;
+  color: var(--teal-dark);
+  background: #f7fbfa;
+}
+
+.selected-directory > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.selected-directory strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.selected-directory small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.storage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.storage-actions .button:disabled,
+.diagnostics-run-row .button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.storage-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 12px;
+  margin-top: 12px;
+  border: 1px solid #e8d5af;
+  border-radius: 9px;
+  color: #795817;
+  background: #fff9e8;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.storage-alert > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.storage-alert > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.storage-alert strong {
+  color: inherit;
+  font-size: 11px;
+}
+
+.storage-alert.danger {
+  border-color: #efc3bd;
+  color: #8f332b;
+  background: #fff4f2;
+}
+
+.storage-alert.success {
+  border-color: #b9dcd6;
+  color: var(--teal-dark);
+  background: var(--teal-soft);
+}
+
+.storage-safety-panel {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: #795817;
+  background: linear-gradient(145deg, #fffdf6, #fff8e7);
+}
+
+.storage-safety-panel > svg {
+  flex: 0 0 auto;
+}
+
+.storage-safety-panel h2 {
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.storage-safety-panel p {
+  margin: 0 0 10px;
+  color: var(--muted-strong);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.diagnostics-header {
+  gap: 12px;
+}
+
+.diagnostics-summary {
+  display: flex;
+  gap: 7px;
+}
+
+.diagnostics-summary span {
+  display: inline-flex;
+  min-height: 27px;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  color: var(--muted-strong);
+  background: var(--surface-soft);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.diagnostics-summary .passed {
+  color: var(--teal-dark);
+  background: var(--teal-soft);
+}
+
+.diagnostics-summary .failed {
+  color: #963c34;
+  background: #fff0ee;
+}
+
+.diagnostic-list {
+  overflow: hidden;
+  margin-top: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+}
+
+.diagnostic-row {
+  display: grid;
+  min-height: 58px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: white;
+}
+
+.diagnostic-row:last-child {
+  border-bottom: 0;
+}
+
+.diagnostic-row > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.diagnostic-row strong {
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.diagnostic-row span,
+.diagnostic-row small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.diagnostic-row > small {
+  white-space: nowrap;
+}
+
+.diagnostic-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--muted);
+  background: var(--surface-soft);
+}
+
+.diagnostic-passed .diagnostic-icon {
+  color: var(--teal-dark);
+  background: var(--teal-soft);
+}
+
+.diagnostic-failed .diagnostic-icon {
+  color: #a8443a;
+  background: #fff0ee;
+}
+
+.diagnostic-blocked .diagnostic-icon {
+  color: #8c651c;
+  background: #fff7e5;
+}
+
+.diagnostic-running .diagnostic-icon {
+  color: var(--violet);
+  background: var(--violet-soft);
+}
+
+.diagnostics-run-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.diagnostics-run-row > span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.spin {
+  animation: onkoflow-spin 900ms linear infinite;
+}
+
+@keyframes onkoflow-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .biopsy-choice-grid.two-options {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -4544,6 +4940,85 @@ p {
   .event-task-note {
     min-height: 48px;
     font-size: 11px;
+  }
+
+  .storage-page-heading {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .storage-build-panel {
+    grid-template-columns: 1fr;
+    padding: 15px;
+  }
+
+  .storage-build-panel dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 13px;
+  }
+
+  .storage-build-panel dd {
+    font-size: 13px;
+  }
+
+  .storage-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .storage-connection-panel,
+  .storage-safety-panel,
+  .diagnostics-panel {
+    padding: 15px;
+  }
+
+  .storage-capabilities {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .storage-capabilities > div {
+    min-height: 64px;
+  }
+
+  .storage-capabilities span,
+  .selected-directory span,
+  .diagnostic-row span,
+  .diagnostic-row small,
+  .diagnostics-run-row > span,
+  .storage-safety-panel p,
+  .storage-alert {
+    font-size: 11px;
+  }
+
+  .storage-capabilities strong,
+  .diagnostic-row strong,
+  .storage-alert strong {
+    font-size: 13px;
+  }
+
+  .storage-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .storage-actions .button,
+  .diagnostics-run-row .button {
+    min-height: 48px;
+    justify-content: center;
+  }
+
+  .diagnostic-row {
+    min-height: 68px;
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 11px;
+  }
+
+  .diagnostic-row > small {
+    display: none;
+  }
+
+  .diagnostics-run-row {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .biopsy-choice-grid.two-options,

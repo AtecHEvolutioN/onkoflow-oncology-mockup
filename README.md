@@ -29,6 +29,19 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Department storage proof-of-concept
+
+The repository now contains a separate static **department diagnostic build**:
+
+```bash
+npm run build:department
+```
+
+It creates `out/` and opens directly on the Storage Diagnostics screen. The screen
+tests the browser/SMB environment with temporary synthetic files; it does **not**
+persist patient records. See the exact Czech setup and stop conditions in
+[docs/LOCAL-DEPARTMENT-SETUP.md](docs/LOCAL-DEPARTMENT-SETUP.md).
+
 ## Checks
 
 ```bash
@@ -39,4 +52,7 @@ npm run build
 
 ## Production direction
 
-Before handling real records, replace the in-memory demo state with an institutionally approved backend, hospital SSO/MFA, role-based authorization, encrypted identifiers, append-only clinical history, comprehensive audit logging, tested backups, and the required privacy/security governance.
+Before handling real records, the departmental SMB diagnostics must pass on the
+actual ÚVN Edge workstations. Only then should the UI be migrated incrementally to
+versioned per-patient records, optimistic concurrency, immutable audit events,
+integrity checks, tested backups, and the required privacy/security governance.
