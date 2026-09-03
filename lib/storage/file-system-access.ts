@@ -74,7 +74,7 @@ export function getStorageCapability(): StorageCapability {
 export async function pickDataDirectory() {
   return window.showDirectoryPicker({
     id: "onkoflow-department-data",
-    mode: "readwrite",
+    mode: "read",
   });
 }
 

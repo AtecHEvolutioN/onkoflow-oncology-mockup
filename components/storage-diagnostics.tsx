@@ -161,7 +161,12 @@ export function StorageDiagnostics() {
         );
       }
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setMessage(
+          "Výběr složky byl zrušen nebo jej prohlížeč odmítl. Pokud jste klikli na Vybrat složku, Edge nepředal aplikaci directory handle; nejde o chybu zadané cesty.",
+        );
+        return;
+      }
       setMessage(`Složku se nepodařilo připojit: ${describeError(error)}`);
       setConnectionState("error");
     }
@@ -257,6 +262,7 @@ export function StorageDiagnostics() {
               <h2>Připojení datové složky</h2>
               <p>
                 Vyberte výhradně složku <code>OnkoFlow\data</code>.
+                Aplikace nejprve požádá o čtení a zápis povolíte samostatně.
               </p>
             </div>
             <span className={`connection-state state-${connectionState}`}>

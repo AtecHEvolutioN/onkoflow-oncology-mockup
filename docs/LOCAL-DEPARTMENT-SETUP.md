@@ -129,7 +129,8 @@ konfiguraci Edge nefunguje. Nepokračujte k pacientskému úložišti.
 1. Klikněte na **Připojit datovou složku**.
 2. Ve Windows dialogu vyberte přesně
    `\\share4.uvn.cz\gyn\OnkoFlow\data`.
-3. Potvrďte přístup pro čtení a zápis.
+3. Aplikace nejprve připojí složku pro čtení. Pokud zobrazí
+   **Vyžaduje oprávnění**, klikněte na **Povolit přístup** a potvrďte zápis.
 4. Klikněte na **Spustit úplný test**.
 
 Test vytvoří dva soubory s náhodným názvem začínajícím `.onkoflow-`, provede čtení,
@@ -170,6 +171,9 @@ Další implementační fáze může začít až po zaznamenání:
   browserové flags a nepoužívat náhradní lokální databázi.
 - `NotAllowedError`: zkontrolovat, že výběr a žádost o oprávnění vznikly přímo po
   kliknutí uživatele.
+- `AbortError` po potvrzení výběru: prohlížeč odmítl složku nebo požadované
+  oprávnění. Ověřit zvlášť prázdnou lokální testovací složku; nejde automaticky o
+  chybu SMB cesty.
 - `NotFoundError`: ověřit dostupnost SMB a přesný výběr `data`.
 - `NoModificationAllowedError` nebo `SecurityError`: ověřit práva Windows/SMB a
   omezení Edge.
