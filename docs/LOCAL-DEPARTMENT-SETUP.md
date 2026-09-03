@@ -7,6 +7,9 @@ neukládají.
 Offline balíček spustí statickou aplikaci na důvěryhodné lokální adrese
 `http://127.0.0.1:8787`. Nepotřebuje internet, Git, instalaci Node.js ani PowerShell.
 
+Na spravovaných stanicích, kde správce blokuje CMD nebo `node.exe`, použijte pro
+diagnostiku variantu PWA níže. Zákaz správce neobcházejte.
+
 ## Bezpečnostní hranice
 
 - GitHub a Vercel obsahují pouze zdrojový kód a syntetická data.
@@ -16,6 +19,33 @@ Offline balíček spustí statickou aplikaci na důvěryhodné lokální adrese
 - Aplikace a `data` jsou oddělené. Aktualizace aplikace se nesmí dotknout `data`.
 - Lokální server poslouchá pouze na `127.0.0.1` a zpřístupňuje jen soubory v `app`.
 - Úspěšný test na jednom počítači není důkazem bezpečné víceuživatelské databáze.
+
+## Varianta A: Edge PWA bez CMD
+
+Tato varianta potřebuje internet jen pro první načtení a aktualizaci aplikace:
+
+1. V Microsoft Edge otevřete
+   `https://onkoflow-oncology-mockup-andrej.vercel.app/`.
+2. Počkejte, až se vpravo dole zobrazí **Offline režim připraven**.
+3. V Edge otevřete **Nastavení a další → Aplikace → Nainstalovat OnkoFlow**.
+   Edge může místo toho zobrazit instalační ikonu přímo v adresním řádku.
+4. Zavřete původní kartu a spusťte OnkoFlow z nabídky Start, plochy nebo
+   `edge://apps`.
+5. Odpojte internet nebo vypněte Wi-Fi a ověřte, že se rozhraní znovu otevře.
+6. Na kartě **Datové úložiště** připojte pouze prázdnou testovací složku a spusťte
+   úplnou diagnostiku.
+
+PWA ukládá do cache pouze rozhraní aplikace. Pacientská data do cache ani na Vercel
+neukládá; File System Access pracuje přímo s uživatelem vybranou složkou. Tato
+varianta je přesto jen POC: kód pochází z veřejného HTTPS originu a service worker se
+může při připojení aktualizovat. Pro klinické použití je nutné schválení IT, řízení
+aktualizací a bezpečnostní kontrola.
+
+Pokud Edge instalaci PWA nenabídne nebo ji správce zakáže, bez zásahu IT zbývá pouze
+online HTTPS mockup. Produkční řešení pak vyžaduje interní HTTPS hosting nebo
+správcem schválenou a podepsanou aplikaci.
+
+## Varianta B: lokální balíček, pokud CMD není blokováno
 
 ## 1. Připravte testovací datovou složku
 

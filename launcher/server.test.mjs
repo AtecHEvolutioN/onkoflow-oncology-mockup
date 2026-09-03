@@ -53,7 +53,7 @@ test("serves the application only to the expected local Host header", async () =
   assert.equal(response.status, 200);
   assert.match(response.body, /OnkoFlow test/);
   assert.equal(response.headers["x-frame-options"], "DENY");
-  assert.match(response.headers["content-security-policy"], /connect-src 'none'/);
+  assert.match(response.headers["content-security-policy"], /connect-src 'self'/);
 
   const rejected = await rawRequest({ host: "attacker.example" });
   assert.equal(rejected.status, 403);
@@ -94,4 +94,3 @@ test("returns 404 for files outside the packaged application", async () => {
   const response = await rawRequest({ path: "/missing.json" });
   assert.equal(response.status, 404);
 });
-

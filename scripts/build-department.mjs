@@ -48,6 +48,25 @@ const fileCompatibleHtml = indexHtml.replaceAll(
 );
 writeFileSync(exportedIndex, fileCompatibleHtml, "utf8");
 
+const pwaVerification = spawnSync(
+  process.execPath,
+  [join(process.cwd(), "scripts", "verify-pwa-export.mjs")],
+  {
+    cwd: process.cwd(),
+    stdio: "inherit",
+    windowsHide: true,
+  },
+);
+
+if (pwaVerification.error) {
+  console.error(`PWA kontrolu nelze spustit: ${pwaVerification.error.message}`);
+  process.exit(1);
+}
+
+if (pwaVerification.status !== 0) {
+  process.exit(pwaVerification.status ?? 1);
+}
+
 console.log("\nDepartment build je připraven v adresáři out.");
 console.log(`Commit: ${commit}`);
 console.log(`Build:  ${buildDate}`);

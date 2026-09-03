@@ -1,4 +1,5 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,12 +15,43 @@ export const metadata: Metadata = {
     index: false,
     follow: false,
   },
+  manifest: "/manifest.webmanifest",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#17354e",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="cs">
-      <body>{children}</body>
+      <body>
+        {children}
+        <Script id="onkoflow-offline-registration" strategy="afterInteractive">
+          {`
+            (() => {
+              if (!("serviceWorker" in navigator) || !window.isSecureContext) return;
+
+              const registerOfflineApp = async () => {
+                try {
+                  await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+                  await navigator.serviceWorker.ready;
+                  document.documentElement.dataset.onkoflowOfflineReady = "true";
+                  console.info("OnkoFlow offline cache is ready.");
+                } catch (error) {
+                  console.error("OnkoFlow offline cache failed:", error);
+                }
+              };
+
+              if (document.readyState === "complete") {
+                void registerOfflineApp();
+              } else {
+                window.addEventListener("load", registerOfflineApp, { once: true });
+              }
+            })();
+          `}
+        </Script>
+      </body>
     </html>
   );
 }

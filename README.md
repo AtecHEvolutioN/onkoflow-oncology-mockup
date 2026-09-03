@@ -31,6 +31,22 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Offline Windows storage proof-of-concept
 
+### Edge PWA mode (no CMD or executable)
+
+For managed workstations that block command files, open the Vercel HTTPS mockup once
+in Microsoft Edge. Version 0.4.1 registers a versioned service worker, precaches the
+complete static interface, and exposes a PWA manifest. After the green
+`Offline režim připraven` indicator appears, install it from Edge via
+**Apps → Install OnkoFlow**. Subsequent launches can use the cached interface without
+internet access while File System Access continues to target the user-selected local
+or SMB folder.
+
+This is still a diagnostic proof of concept. Do not enter real patient data. A public
+origin and automatically updating service worker require hospital security approval
+before any clinical deployment.
+
+### Portable localhost package (only where policy permits CMD)
+
 The preferred installation route for the **offline department diagnostic build** is
 the self-contained Windows ZIP on the
 [latest GitHub Release](https://github.com/AtecHEvolutioN/onkoflow-oncology-mockup/releases/latest).
