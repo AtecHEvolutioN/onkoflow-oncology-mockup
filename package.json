@@ -1,11 +1,12 @@
 {
   "name": "oncology-care-registry",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "build:department": "node scripts/build-department.mjs",
+    "test:launcher": "node --test launcher/server.test.mjs",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"

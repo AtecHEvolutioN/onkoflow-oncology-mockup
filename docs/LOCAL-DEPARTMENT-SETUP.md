@@ -1,11 +1,11 @@
-# OnkoFlow: lokální departmental proof-of-concept
+# OnkoFlow: offline departmental proof-of-concept
 
 Tento postup instaluje pouze **diagnostickou verzi** OnkoFlow. Pacientská část nadále
 pracuje se smyšlenými daty v paměti a klinická data se do sdílené složky zatím
 neukládají.
 
-Účelem první fáze je ověřit, zda konkrétní verze Microsoft Edge a SMB prostředí ÚVN
-spolehlivě podporují operace, na kterých má budoucí úložiště stát.
+Offline balíček spustí statickou aplikaci na důvěryhodné lokální adrese
+`http://127.0.0.1:8787`. Nepotřebuje internet, Git, instalaci Node.js ani PowerShell.
 
 ## Bezpečnostní hranice
 
@@ -13,22 +13,23 @@ spolehlivě podporují operace, na kterých má budoucí úložiště stát.
 - Skutečná pacientská data se nesmějí zadávat do demo ani diagnostického buildu.
 - Diagnostika ukládá do IndexedDB pouze browserový `FileSystemDirectoryHandle`.
 - Diagnostika nikdy neukládá klinický obsah do IndexedDB.
-- `app` a `data` jsou dvě oddělené složky. Aktualizace `app` se nesmí dotknout `data`.
+- Aplikace a `data` jsou oddělené. Aktualizace aplikace se nesmí dotknout `data`.
+- Lokální server poslouchá pouze na `127.0.0.1` a zpřístupňuje jen soubory v `app`.
 - Úspěšný test na jednom počítači není důkazem bezpečné víceuživatelské databáze.
 
-## 1. Připravte sdílené složky
+## 1. Připravte testovací datovou složku
 
-Ve Windows Průzkumníkovi vytvořte:
+Budoucí sdílené úložiště je:
 
 ```text
-\\share4.uvn.cz\gyn\OnkoFlow\
-├── app\
-└── data\
+\\share4.uvn.cz\gyn\OnkoFlow\data
 ```
 
-Pro první test musí být `data` prázdná. Nevytvářejte v ní žádné skutečné záznamy.
+Pro první test vytvořte prázdnou lokální složku `OnkoFlowTest`. Teprve po jejím
+úspěšném otestování použijte samostatnou prázdnou testovací složku na SMB. Živou
+datovou složku ani skutečné záznamy zatím nepoužívejte.
 
-Ověřte na každé testovací stanici, že váš běžný nemocniční účet může v `data`:
+Ověřte, že váš běžný nemocniční účet může v testovací SMB složce:
 
 1. vytvořit obyčejný textový soubor;
 2. otevřít jej;
@@ -38,158 +39,148 @@ Ověřte na každé testovací stanici, že váš běžný nemocniční účet m
 Pokud selže už tento Windows test, nepokračujte. Jde o oprávnění SMB, nikoli o chybu
 OnkoFlow.
 
-## 2. Stáhněte hotový ZIP v prohlížeči
+## 2. Stáhněte offline Windows ZIP
 
-Na pracovní stanici není potřeba Git, Node.js ani PowerShell build:
+Na pracovní stanici není potřeba vývojové prostředí:
 
 1. Otevřete
    [nejnovější GitHub Release](https://github.com/AtecHEvolutioN/onkoflow-oncology-mockup/releases/latest).
-2. V části **Assets** stáhněte soubor
-   `OnkoFlow-department-vX.Y.Z-XXXXXXXXXXXX.zip`.
+2. V části **Assets** stáhněte
+   `OnkoFlow-offline-Windows-vX.Y.Z-XXXXXXXXXXXX.zip`.
 3. Stáhněte také stejně pojmenovaný soubor s příponou `.sha256`.
-4. Rozbalte ZIP do dočasné složky. V jejím kořeni musí být `index.html` a složka
-   `_next`; nesmí tam být složka `data`.
+4. Rozbalte **celý** ZIP do lokální složky, například
+   `C:\Users\Public\OnkoFlow`.
+
+Po rozbalení musí být v kořeni:
+
+```text
+OnkoFlow\
+├── Start-OnkoFlow.cmd
+├── BUILD-INFO.txt
+├── app\
+├── launcher\
+├── runtime\
+└── THIRD-PARTY-LICENSES\
+```
+
+Balíček nesmí obsahovat složku `data`.
 
 Volitelná kontrola integrity v PowerShellu:
 
 ```powershell
-Get-FileHash .\OnkoFlow-department-vX.Y.Z-XXXXXXXXXXXX.zip -Algorithm SHA256
-Get-Content .\OnkoFlow-department-vX.Y.Z-XXXXXXXXXXXX.zip.sha256
+Get-FileHash .\OnkoFlow-offline-Windows-vX.Y.Z-XXXXXXXXXXXX.zip -Algorithm SHA256
+Get-Content .\OnkoFlow-offline-Windows-vX.Y.Z-XXXXXXXXXXXX.zip.sha256
 ```
 
-Oba zobrazené SHA-256 otisky musí být stejné. Název obsahuje verzi aplikace a prvních
-12 znaků Git commitu, takže lze přesně dohledat nasazený build.
+Oba SHA-256 otisky musí být stejné. Název obsahuje verzi aplikace a prvních 12 znaků
+Git commitu.
 
-### Náhradní postup: lokální sestavení
+## 3. Spusťte aplikaci bez internetu
 
-Požadavky:
+1. Dvakrát klikněte na `Start-OnkoFlow.cmd`.
+2. Ponechte otevřené konzolové okno **OnkoFlow - lokalni aplikace**.
+3. Launcher spustí server pouze na tomto počítači a automaticky otevře Edge na:
 
-- Git;
-- Node.js `20.9.0` nebo novější;
-- lokální kopie repozitáře;
-- žádné Node.js ani jiné instalace nejsou potřeba na nemocničních stanicích.
+   `http://127.0.0.1:8787/`
 
-V PowerShellu:
+Lokální server povoluje jen čtení zabalených souborů aplikace metodami GET/HEAD.
+Datovou složku přes HTTP nezpřístupňuje a Content Security Policy blokuje síťové
+požadavky stránky.
 
-```powershell
-git clone https://github.com/AtecHEvolutioN/onkoflow-oncology-mockup.git
-Set-Location .\onkoflow-oncology-mockup
-npm ci
-npm run typecheck
-npm run lint
-npm run build:department
-```
+Pokud port `8787` používá jiná aplikace, launcher zobrazí chybu. Port neměňte nahodile:
+stabilní origin umožňuje Edge poznat aplikaci a obnovit uložený directory handle.
 
-Výsledkem je adresář `out`. Obsahuje stejné statické HTML, CSS a JavaScript a
-nevyžaduje Node.js server.
+Zavřením konzolového okna se lokální server zastaví. Opětovné spuštění během již
+běžící instance pouze otevře existující aplikaci.
 
-## 3. Zkopírujte pouze aplikaci
+## 4. Zkontrolujte prostředí
 
-Z rozbaleného ZIPu zkopírujte jeho **obsah** do:
+Aplikace má začít na kartě **Datové úložiště** a zobrazit **DEPARTMENT POC**.
+Zkontrolujte:
 
-```text
-\\share4.uvn.cz\gyn\OnkoFlow\app
-```
+- `Protokol = http:`;
+- `Bezpečný kontext = ANO`;
+- `Directory picker = ANO`;
+- `IndexedDB = ANO`;
+- adresa začíná přesně `http://127.0.0.1:8787/`, nikoli `file:`.
 
-Soubor `index.html` tedy musí skončit přímo jako
-`\\share4.uvn.cz\gyn\OnkoFlow\app\index.html`, ne v další vnořené složce.
+Pokud launcher stránku spustí, ale některá z posledních tří kontrol selže,
+zaznamenejte stav a nepokračujte k pacientskému úložišti.
 
-Pokud používáte náhradní lokální build, z kořene repozitáře spusťte v PowerShellu:
-
-```powershell
-$AppTarget = "\\share4.uvn.cz\gyn\OnkoFlow\app"
-robocopy .\out $AppTarget /E
-if ($LASTEXITCODE -gt 7) { throw "Kopírování aplikace selhalo: $LASTEXITCODE" }
-```
-
-Příkaz záměrně nekopíruje ani nemaže `OnkoFlow\data`. Nepoužívejte cíl
-`\\share4.uvn.cz\gyn\OnkoFlow` a nepoužívejte `/MIR` nad nadřazenou složkou.
-
-Po kopírování musí existovat:
-
-```text
-\\share4.uvn.cz\gyn\OnkoFlow\app\index.html
-```
-
-## 4. Otevřete aplikaci na nemocniční stanici
-
-1. Otevřete Microsoft Edge.
-2. Otevřete soubor
-   `\\share4.uvn.cz\gyn\OnkoFlow\app\index.html`.
-3. Aplikace má začít na kartě **Datové úložiště** a musí zobrazit
-   **DEPARTMENT POC**.
-4. Zkontrolujte hodnoty `Protokol`, `Bezpečný kontext`, `Directory picker` a
-   `IndexedDB`.
-
-Pokud se nenačte vzhled nebo JavaScript, statické spuštění přímo z UNC cesty v dané
-konfiguraci Edge nefunguje. Nepokračujte k pacientskému úložišti.
-
-## 5. Připojte testovací datovou složku
+## 5. Připojte prázdnou testovací složku
 
 1. Klikněte na **Připojit datovou složku**.
-2. Ve Windows dialogu vyberte přesně
-   `\\share4.uvn.cz\gyn\OnkoFlow\data`.
-3. Aplikace nejprve připojí složku pro čtení. Pokud zobrazí
-   **Vyžaduje oprávnění**, klikněte na **Povolit přístup** a potvrďte zápis.
+2. Vyberte prázdnou lokální složku `OnkoFlowTest`.
+3. Pokud aplikace zobrazí **Vyžaduje oprávnění**, klikněte na
+   **Povolit přístup** a potvrďte zápis.
 4. Klikněte na **Spustit úplný test**.
 
 Test vytvoří dva soubory s náhodným názvem začínajícím `.onkoflow-`, provede čtení,
-zápis, změnu obsahu, smazání a sekvenční simulaci konfliktu revizí. Soubory má na
-konci odstranit.
+zápis, změnu obsahu, smazání a sekvenční simulaci konfliktu revizí. Na konci je musí
+odstranit.
 
-Za úspěch považujte pouze stav, kdy je všech 12 kontrol zelených a v `data` nezůstal
-žádný diagnostický soubor.
+Za úspěch považujte pouze všech 12 zelených kontrol a žádný zbývající diagnostický
+soubor. Potom lze stejný test zopakovat s prázdnou testovací složkou na SMB.
 
 ## 6. Ověřte obnovení přístupu
 
-1. Zavřete všechna okna Edge.
-2. Znovu otevřete `app\index.html`.
-3. Pokud Edge oprávnění neuchoval, aplikace musí nabídnout **Povolit přístup**.
+1. Zavřete všechna okna Edge a konzolové okno launcheru.
+2. Znovu spusťte `Start-OnkoFlow.cmd`.
+3. Pokud Edge oprávnění neuchoval, aplikace nabídne **Povolit přístup**.
 4. Po povolení spusťte celý test znovu.
 
-Directory handle může být zapamatován, ale prohlížeč může po uzavření všech karet
-znovu vyžadovat oprávnění. To je očekávané bezpečnostní chování, nikoli důvod pro
-lokální kopii databáze.
+Directory handle může být zapamatován, ale Edge může po uzavření všech oken znovu
+vyžadovat oprávnění. To je očekávané bezpečnostní chování.
 
 ## 7. Opakujte na druhém počítači
 
-Proveďte kroky 4–6 alespoň na dvou pracovních stanicích, které budou OnkoFlow reálně
+Proveďte kroky 3–6 alespoň na dvou pracovních stanicích, které budou OnkoFlow reálně
 používat. Sekvenční test konfliktu pouze ověřuje logiku `expectedRevision`; neprokazuje
 atomicitu nahrazení souboru ani chování při skutečně souběžném zápisu přes SMB.
 
-Další implementační fáze může začít až po zaznamenání:
+Zaznamenejte:
 
-- verze Edge na obou stanicích;
-- výsledku všech 12 kontrol;
+- verzi Edge na obou stanicích;
+- výsledek všech 12 kontrol;
 - zda fungovalo obnovení directory handle;
 - zda po testu nezůstaly dočasné soubory;
-- případných názvů a textů chyb.
+- případné názvy a texty chyb.
+
+## Aktualizace aplikace
+
+1. Zavřete konzolové okno lokálního serveru.
+2. Stáhněte nový `OnkoFlow-offline-Windows-...zip` a ověřte SHA-256.
+3. Rozbalte jej do nové lokální složky.
+4. Spusťte nový `Start-OnkoFlow.cmd`.
+
+Datová složka leží mimo balíček, takže výměna aplikace ji nemaže ani nepřepisuje.
+Starý balíček ponechte do ověření nové verze jako možnost návratu. Protože origin
+`http://127.0.0.1:8787` zůstává stejný, uložený directory handle může zůstat dostupný;
+Edge může přesto znovu vyžádat oprávnění.
 
 ## Co dělat při chybě
 
 - `Bezpečný kontext = NE` nebo `Directory picker = NE`: zastavit. Nezapínat skryté
-  browserové flags a nepoužívat náhradní lokální databázi.
-- `NotAllowedError`: zkontrolovat, že výběr a žádost o oprávnění vznikly přímo po
-  kliknutí uživatele.
-- `AbortError` po potvrzení výběru: prohlížeč odmítl složku nebo požadované
-  oprávnění. Ověřit zvlášť prázdnou lokální testovací složku; nejde automaticky o
-  chybu SMB cesty.
-- `NotFoundError`: ověřit dostupnost SMB a přesný výběr `data`.
-- `NoModificationAllowedError` nebo `SecurityError`: ověřit práva Windows/SMB a
+  browserové flags.
+- `NotAllowedError`: výběr a oprávnění musí následovat přímo po kliknutí uživatele.
+- `AbortError`: Edge odmítl složku nebo bylo okno výběru zrušeno. Ověřte nejprve
+  prázdnou lokální složku.
+- `NotFoundError`: ověřte dostupnost SMB a správnou testovací složku.
+- `NoModificationAllowedError` nebo `SecurityError`: ověřte práva Windows/SMB a
   omezení Edge.
 - chyba zápisu, změny nebo smazání: nepokračovat k pacientským datům.
-- zbylý `.onkoflow-*` soubor: zaznamenat chybu a ručně jej odstranit až po ověření,
+- zbylý `.onkoflow-*` soubor: zaznamenejte chybu a ručně jej odstraňte až po ověření,
   že jde skutečně o diagnostický soubor.
 
 ## Technická poznámka
 
-File System Access API vyžaduje bezpečný kontext a uživatelské gesto. Standard
-Secure Contexts doporučuje považovat `file:` URL za potenciálně důvěryhodné, ale
-výslovně dovoluje prohlížeči zvolit přísnější chování. Proto je test na konkrétním
-ÚVN Edge/SMB prostředí nepřeskočitelný.
+File System Access API vyžaduje bezpečný kontext a uživatelské gesto. Loopback origin
+`http://127.0.0.1` je podle Secure Contexts potenciálně důvěryhodný a umožňuje
+directory picker bez internetového hostingu. Přímé `file:` spuštění v konkrétní
+konfiguraci ÚVN výběr adresáře nepředalo, proto jej tento balíček nepoužívá.
 
 Primární technické zdroje:
 
 - https://developer.chrome.com/docs/capabilities/web-apis/file-system-access
-- https://w3c.github.io/webappsec-secure-contexts/
+- https://www.w3.org/TR/secure-contexts/
 - https://nextjs.org/docs/app/guides/static-exports

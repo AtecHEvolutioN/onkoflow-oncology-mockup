@@ -39,6 +39,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Test local launcher
+        run: npm run test:launcher
+
       - name: Build departmental export
         run: npm run build:department
 
@@ -104,4 +107,96 @@ jobs:
             --target "${GITHUB_SHA}" \
             --title "OnkoFlow departmental v${APP_VERSION} (${SHORT_SHA})" \
             --latest \
-            --notes "Statický departmental build OnkoFlow pro složku app. ZIP obsahuje pouze aplikaci; složka data ani pacientská data nejsou součástí balíčku."
+            --notes "Departmental build OnkoFlow. Release obsahuje statický ZIP pro vývojáře a samostatný offline Windows ZIP s lokálním launcherem. Žádný balíček neobsahuje složku data ani pacientská data."
+
+  build-offline-launcher:
+    name: Build Windows offline package
+    needs: build-and-release
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test local launcher
+        run: npm run test:launcher
+
+      - name: Build departmental export
+        run: npm run build:department
+
+      - name: Package self-contained offline app
+        id: package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          if (-not (Test-Path .\out\index.html)) {
+            throw "Department build is missing out\\index.html"
+          }
+          if (Test-Path .\out\data) {
+            throw "Department build must not contain a data directory"
+          }
+
+          $version = node -p "require('./package.json').version"
+          $shortSha = $env:GITHUB_SHA.Substring(0, 12)
+          $tag = "department-v$version-$shortSha"
+          $archive = "OnkoFlow-offline-Windows-v$version-$shortSha.zip"
+          $packageRoot = Join-Path $env:RUNNER_TEMP "OnkoFlow-offline-Windows"
+
+          New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $packageRoot "app") | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $packageRoot "launcher") | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $packageRoot "runtime") | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $packageRoot "THIRD-PARTY-LICENSES") | Out-Null
+
+          Copy-Item .\out\* (Join-Path $packageRoot "app") -Recurse -Force
+          Copy-Item .\launcher\server.mjs (Join-Path $packageRoot "launcher\server.mjs") -Force
+          Copy-Item .\launcher\Start-OnkoFlow.cmd (Join-Path $packageRoot "Start-OnkoFlow.cmd") -Force
+
+          $nodeExecutable = (Get-Command node).Source
+          $nodeDirectory = Split-Path $nodeExecutable -Parent
+          $nodeLicense = Join-Path $nodeDirectory "LICENSE"
+          if (-not (Test-Path $nodeLicense)) {
+            throw "Node.js LICENSE was not found next to node.exe"
+          }
+          Copy-Item $nodeExecutable (Join-Path $packageRoot "runtime\node.exe") -Force
+          Copy-Item $nodeLicense (Join-Path $packageRoot "THIRD-PARTY-LICENSES\Node.js-LICENSE.txt") -Force
+
+          @(
+            "OnkoFlow offline Windows v$version"
+            "Commit: $env:GITHUB_SHA"
+            "Node.js runtime: $(node --version)"
+            "Start: double-click Start-OnkoFlow.cmd"
+            "Local URL: http://127.0.0.1:8787/"
+            "This package never contains the data directory."
+          ) | Set-Content (Join-Path $packageRoot "BUILD-INFO.txt") -Encoding utf8
+
+          Compress-Archive -Path (Join-Path $packageRoot "*") -DestinationPath $archive -CompressionLevel Optimal
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $archive" | Set-Content "$archive.sha256" -Encoding ascii
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "short_sha=$shortSha" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "archive=$archive" >> $env:GITHUB_OUTPUT
+
+      - name: Attach offline package to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.package.outputs.tag }}
+          ARCHIVE: ${{ steps.package.outputs.archive }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          gh release upload $env:RELEASE_TAG $env:ARCHIVE "$env:ARCHIVE.sha256" --clobber --repo $env:GITHUB_REPOSITORY

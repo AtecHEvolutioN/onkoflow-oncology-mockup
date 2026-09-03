@@ -29,14 +29,17 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Department storage proof-of-concept
+## Offline Windows storage proof-of-concept
 
-The preferred installation route for the static **department diagnostic build** is
-the browser-downloadable ZIP on the
+The preferred installation route for the **offline department diagnostic build** is
+the self-contained Windows ZIP on the
 [latest GitHub Release](https://github.com/AtecHEvolutioN/onkoflow-oncology-mockup/releases/latest).
 GitHub Actions rebuilds and publishes a new, commit-labelled ZIP after every update
-to `main`. The ZIP contains only the contents intended for the departmental `app`
-folder; it never contains the separate `data` folder.
+to `main`. Download the asset named `OnkoFlow-offline-Windows-...zip`, extract the
+whole package locally, and double-click `Start-OnkoFlow.cmd`. The bundled official
+Node.js runtime serves the static application only on `127.0.0.1:8787` and opens
+Edge. No internet connection, Git, Node.js installation, or PowerShell is required
+at runtime. The ZIP never contains the separate `data` folder.
 
 The same build can be created locally as a fallback:
 
@@ -44,9 +47,10 @@ The same build can be created locally as a fallback:
 npm run build:department
 ```
 
-It creates `out/` and opens directly on the Storage Diagnostics screen. The screen
-tests the browser/SMB environment with temporary synthetic files; it does **not**
-persist patient records. See the exact Czech setup and stop conditions in
+It creates `out/`, which still needs to be served from a trustworthy local origin;
+double-clicking `out/index.html` is not supported in the tested ÚVN Edge setup. The
+diagnostics screen tests the browser/SMB environment with temporary synthetic files;
+it does **not** persist patient records. See the exact Czech setup and stop conditions in
 [docs/LOCAL-DEPARTMENT-SETUP.md](docs/LOCAL-DEPARTMENT-SETUP.md).
 
 ## Checks
@@ -54,6 +58,7 @@ persist patient records. See the exact Czech setup and stop conditions in
 ```bash
 npm run typecheck
 npm run lint
+npm run test:launcher
 npm run build
 ```
 
