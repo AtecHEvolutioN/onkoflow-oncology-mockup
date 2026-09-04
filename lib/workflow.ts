@@ -372,7 +372,11 @@ function getWorkflowTransitionPlan(
   }
 }
 
-export function advancePatientThroughWorkflow(patient: Patient, input: WorkflowAdvanceInput) {
+export function advancePatientThroughWorkflow(
+  patient: Patient,
+  input: WorkflowAdvanceInput,
+  author: string,
+) {
   if (!input.date) return null;
   const plan = getWorkflowTransitionPlan(patient, input);
   if (!plan) return null;
@@ -388,7 +392,7 @@ export function advancePatientThroughWorkflow(patient: Patient, input: WorkflowA
     date: eventDate,
     title: plan.eventTitle,
     description: `${plan.eventDescription}${note ? ` Poznámka: ${note}` : ""}`,
-    author: "Andrej Demo",
+    author,
     status: "Dokončeno",
   };
 

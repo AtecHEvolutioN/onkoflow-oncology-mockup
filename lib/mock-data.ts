@@ -72,7 +72,7 @@ export type Patient = {
   initials: string;
   firstName: string;
   lastName: string;
-  birthNumberMasked: string;
+  birthNumber: string;
   dateOfBirth: string;
   primaryDiagnosisCode: string;
   primaryDiagnosisLabel: string;
@@ -128,7 +128,7 @@ export const initialPatients: Patient[] = [
     initials: "AT",
     firstName: "Anna",
     lastName: "Testová",
-    birthNumberMasked: "••••••/1048",
+    birthNumber: "685412/0000",
     dateOfBirth: "1968-04-12",
     primaryDiagnosisCode: "C54.1",
     primaryDiagnosisLabel: "Zhoubný novotvar endometria",
@@ -197,7 +197,7 @@ export const initialPatients: Patient[] = [
     initials: "BU",
     firstName: "Běla",
     lastName: "Ukázková",
-    birthNumberMasked: "••••••/2216",
+    birthNumber: "756103/0000",
     dateOfBirth: "1975-11-03",
     primaryDiagnosisCode: "C56",
     primaryDiagnosisLabel: "Zhoubný novotvar vaječníku",
@@ -257,7 +257,7 @@ export const initialPatients: Patient[] = [
     initials: "CD",
     firstName: "Cecílie",
     lastName: "Demo",
-    birthNumberMasked: "••••••/3062",
+    birthNumber: "825219/0000",
     dateOfBirth: "1982-02-19",
     primaryDiagnosisCode: "C53.1",
     primaryDiagnosisLabel: "Zhoubný novotvar exocervixu",
@@ -317,7 +317,7 @@ export const initialPatients: Patient[] = [
     initials: "DV",
     firstName: "Dora",
     lastName: "Vzorová",
-    birthNumberMasked: "••••••/4179",
+    birthNumber: "595907/0000",
     dateOfBirth: "1959-09-07",
     primaryDiagnosisCode: "C51",
     primaryDiagnosisLabel: "Zhoubný novotvar vulvy",
@@ -377,7 +377,7 @@ export const initialPatients: Patient[] = [
     initials: "EF",
     firstName: "Eva",
     lastName: "Fiktivní",
-    birthNumberMasked: "••••••/5293",
+    birthNumber: "715628/0000",
     dateOfBirth: "1971-06-28",
     primaryDiagnosisCode: "D06",
     primaryDiagnosisLabel: "Karcinom in situ hrdla děložního",

@@ -20,6 +20,7 @@ import {
   LayoutDashboard,
   ListChecks,
   LockKeyhole,
+  LogOut,
   Menu,
   Microscope,
   PencilLine,
@@ -34,6 +35,7 @@ import {
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { StorageDiagnostics } from "@/components/storage-diagnostics";
+import { LoginScreen, type OnkoFlowSession } from "@/components/login-screen";
 import { isDepartmentMode } from "@/lib/build-info";
 import {
   BiopsyStatus,
@@ -59,6 +61,11 @@ import {
 import type { CompletedBiopsyStatus, WorkflowAdvanceInput } from "@/lib/workflow";
 
 type View = "dashboard" | "patients" | "patient" | "tasks" | "audit" | "storage";
+
+type PatientPhaseFilter = {
+  label: string;
+  phases: CarePhase[];
+};
 
 type BirthNumberResult = {
   date: string;
@@ -213,10 +220,20 @@ function parseBirthNumber(value: string): BirthNumberResult {
   return { date, checksumValid, error: "" };
 }
 
-function maskBirthNumber(value: string) {
+function formatBirthNumber(value: string) {
   const digits = value.replace(/\D/g, "");
-  const suffix = digits.slice(-4).padStart(4, "•");
-  return `••••••/${suffix}`;
+  if (digits.length < 7) return value.trim();
+  return `${digits.slice(0, 6)}/${digits.slice(6)}`;
+}
+
+function getInitials(value: string) {
+  return value
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0] ?? "")
+    .join("")
+    .toLocaleUpperCase("cs-CZ");
 }
 
 const phaseStyleIndex: Record<CarePhase, number> = {
@@ -372,13 +389,13 @@ function EmptyState({
 }
 
 export function OncologyRegistry() {
+  const [session, setSession] = useState<OnkoFlowSession | null>(null);
   const [patients, setPatients] = useState<Patient[]>(initialPatients);
   const [tasks, setTasks] = useState<CareTask[]>(demoTasks);
-  const [activeView, setActiveView] = useState<View>(() =>
-    isDepartmentMode ? "storage" : "dashboard",
-  );
+  const [activeView, setActiveView] = useState<View>("dashboard");
   const [selectedPatientId, setSelectedPatientId] = useState(initialPatients[0].id);
   const [searchQuery, setSearchQuery] = useState("");
+  const [patientPhaseFilter, setPatientPhaseFilter] = useState<PatientPhaseFilter | null>(null);
   const [isNewPatientOpen, setIsNewPatientOpen] = useState(false);
   const [isNewEventOpen, setIsNewEventOpen] = useState(false);
   const [isAdvancePhaseOpen, setIsAdvancePhaseOpen] = useState(false);
@@ -401,7 +418,15 @@ export function OncologyRegistry() {
   const navigate = (view: View) => {
     setActiveView(view);
     setSidebarOpen(false);
-    if (view !== "patients") setSearchQuery("");
+    setSearchQuery("");
+    if (view === "patients") setPatientPhaseFilter(null);
+  };
+
+  const openPatientCategory = (label: string, phases: CarePhase[]) => {
+    setPatientPhaseFilter({ label, phases });
+    setSearchQuery("");
+    setActiveView("patients");
+    setSidebarOpen(false);
   };
 
   const openPatient = (id: string) => {
@@ -458,8 +483,8 @@ export function OncologyRegistry() {
   };
 
   const advancePatient = (input: WorkflowAdvanceInput) => {
-    if (!selectedPatient) return;
-    const updatedPatient = advancePatientThroughWorkflow(selectedPatient, input);
+    if (!selectedPatient || !session) return;
+    const updatedPatient = advancePatientThroughWorkflow(selectedPatient, input, session.userName);
     if (!updatedPatient) {
       setToast("Pro posun pacienta je potřeba doplnit povinné údaje.");
       return;
@@ -479,6 +504,10 @@ export function OncologyRegistry() {
     setIsAdvancePhaseOpen(false);
     setToast(`Pacient byl posunut do fáze ${updatedPatient.phase}.`);
   };
+
+  if (!session) {
+    return <LoginScreen onLogin={setSession} />;
+  }
 
   return (
     <div className="app-shell">
@@ -538,12 +567,20 @@ export function OncologyRegistry() {
         </div>
 
         <div className="user-card">
-          <div className="avatar avatar-small">AD</div>
+          <div className="avatar avatar-small">{getInitials(session.userName)}</div>
           <div className="user-card-copy">
-            <strong>Andrej Demo</strong>
-            <span>Lékař · mockup</span>
+            <strong>{session.userName}</strong>
+            <span>Složka: {session.directoryName}</span>
           </div>
-          <ChevronRight size={17} aria-hidden="true" />
+          <button
+            className="user-logout-button"
+            type="button"
+            aria-label="Odhlásit uživatele"
+            title="Odhlásit"
+            onClick={() => setSession(null)}
+          >
+            <LogOut size={17} aria-hidden="true" />
+          </button>
         </div>
       </aside>
 
@@ -581,6 +618,13 @@ export function OncologyRegistry() {
             <strong>{currentViewLabel}</strong>
           </div>
           <div className="topbar-actions">
+            <div className="topbar-session" title={`Datová složka: ${session.directoryName}`}>
+              <span className="avatar avatar-tiny">{getInitials(session.userName)}</span>
+              <div>
+                <strong>{session.userName}</strong>
+                <span>{session.directoryName}</span>
+              </div>
+            </div>
             {!isDepartmentMode ? (
               <button
                 className="button button-primary topbar-new"
@@ -602,6 +646,7 @@ export function OncologyRegistry() {
               tasks={tasks}
               openPatient={openPatient}
               navigate={navigate}
+              openPatientCategory={openPatientCategory}
             />
           )}
           {activeView === "patients" && (
@@ -612,12 +657,14 @@ export function OncologyRegistry() {
               openPatient={openPatient}
               openNewPatient={() => setIsNewPatientOpen(true)}
               allowPatientCreation={!isDepartmentMode}
+              phaseFilter={patientPhaseFilter}
+              clearPhaseFilter={() => setPatientPhaseFilter(null)}
             />
           )}
           {activeView === "patient" && selectedPatient && (
             <PatientDetail
               patient={selectedPatient}
-              goBack={() => navigate("patients")}
+              goBack={() => setActiveView("patients")}
               openNewEvent={() => setIsNewEventOpen(true)}
               openAdvancePhase={() => setIsAdvancePhaseOpen(true)}
             />
@@ -663,12 +710,17 @@ export function OncologyRegistry() {
       </nav>
 
       {isNewPatientOpen && !isDepartmentMode && (
-        <NewPatientModal onClose={() => setIsNewPatientOpen(false)} onCreate={createPatient} />
+        <NewPatientModal
+          currentUser={session.userName}
+          onClose={() => setIsNewPatientOpen(false)}
+          onCreate={createPatient}
+        />
       )}
 
       {isNewEventOpen && selectedPatient && (
         <NewEventModal
           patient={selectedPatient}
+          currentUser={session.userName}
           onClose={() => setIsNewEventOpen(false)}
           onCreate={addEvent}
         />
@@ -697,11 +749,13 @@ function DashboardView({
   tasks,
   openPatient,
   navigate,
+  openPatientCategory,
 }: {
   patients: Patient[];
   tasks: CareTask[];
   openPatient: (id: string) => void;
   navigate: (view: View) => void;
+  openPatientCategory: (label: string, phases: CarePhase[]) => void;
 }) {
   const highPriority = patients.filter((patient) => patient.priority === "Vysoká").length;
   const inTreatment = patients.filter(
@@ -729,6 +783,81 @@ function DashboardView({
           Zobrazit kalendář
         </button>
       </div>
+
+      <section className="panel process-panel process-panel-top">
+        <div className="panel-header">
+          <div>
+            <h2>Proces onkologické péče</h2>
+            <p>
+              Hlavní fáze a čekací stavy před histologií, MDT a zahájením léčby.
+            </p>
+          </div>
+          <span className="panel-meta">Aktualizováno právě teď</span>
+        </div>
+        <div className="phase-summary-grid">
+          {processSummarySteps.map((step) => {
+            const count = patients.filter((patient) => step.phases.includes(patient.phase)).length;
+            return (
+              <button
+                className={`phase-summary ${step.kind === "waiting" ? "waiting" : ""}`}
+                type="button"
+                key={step.number}
+                onClick={() => openPatientCategory(step.label, step.phases)}
+                aria-label={`${step.label}: ${count} pacientů. Otevřít seznam.`}
+              >
+                <span className={`phase-number phase-number-${step.tone}`}>
+                  {step.number}
+                </span>
+                <div>
+                  <strong>{step.label}</strong>
+                  {step.description ? <small>{step.description}</small> : null}
+                  <span>{count} pacientů</span>
+                </div>
+                <div className="phase-bar">
+                  <span style={{ width: `${Math.max(14, (count / patients.length) * 100)}%` }} />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <div className="process-route-overview">
+          <div className="process-route-label">
+            <span>Výstup MDT</span>
+            <strong>Tři možné větve</strong>
+          </div>
+          {treatmentRoutes.map((route) => {
+            const count = patients.filter((patient) => patient.treatmentRoute === route.phase).length;
+            return (
+              <button
+                className="process-route-card"
+                type="button"
+                key={route.code}
+                onClick={() => openPatientCategory(route.phase, [route.phase])}
+                aria-label={`${route.phase}: ${count} pacientů. Otevřít seznam.`}
+              >
+                <span className="route-code">{route.code}</span>
+                <div>
+                  <strong>{route.phase}</strong>
+                  <small>{route.sites}</small>
+                  {route.next && (
+                    <span className="route-next">
+                      <ArrowRight size={13} aria-hidden="true" /> {route.next}
+                    </span>
+                  )}
+                </div>
+                <b>{count}</b>
+              </button>
+            );
+          })}
+        </div>
+        <div className="process-rule-note">
+          <Microscope size={17} aria-hidden="true" />
+          <span>
+            Pokud je při příjmu doložena biopsie z externího pracoviště, druhá biopsie se
+            neplánuje a pacient pokračuje do stagingu.
+          </span>
+        </div>
+      </section>
 
       <div className="metric-grid">
         <button className="metric-card" type="button" onClick={() => navigate("patients")}>
@@ -844,73 +973,6 @@ function DashboardView({
         </section>
       </div>
 
-      <section className="panel process-panel">
-        <div className="panel-header">
-          <div>
-            <h2>Proces onkologické péče</h2>
-            <p>
-              Hlavní fáze a čekací stavy před histologií, MDT a zahájením léčby.
-            </p>
-          </div>
-          <span className="panel-meta">Aktualizováno právě teď</span>
-        </div>
-        <div className="phase-summary-grid">
-          {processSummarySteps.map((step) => {
-            const count = patients.filter((patient) => step.phases.includes(patient.phase)).length;
-            return (
-              <button
-                className={`phase-summary ${step.kind === "waiting" ? "waiting" : ""}`}
-                type="button"
-                key={step.number}
-                onClick={() => navigate("patients")}
-              >
-                <span className={`phase-number phase-number-${step.tone}`}>
-                  {step.number}
-                </span>
-                <div>
-                  <strong>{step.label}</strong>
-                  {step.description ? <small>{step.description}</small> : null}
-                  <span>{count} pacientů</span>
-                </div>
-                <div className="phase-bar">
-                  <span style={{ width: `${Math.max(14, (count / patients.length) * 100)}%` }} />
-                </div>
-              </button>
-            );
-          })}
-        </div>
-        <div className="process-route-overview">
-          <div className="process-route-label">
-            <span>Výstup MDT</span>
-            <strong>Tři možné větve</strong>
-          </div>
-          {treatmentRoutes.map((route) => {
-            const count = patients.filter((patient) => patient.treatmentRoute === route.phase).length;
-            return (
-              <div className="process-route-card" key={route.code}>
-                <span className="route-code">{route.code}</span>
-                <div>
-                  <strong>{route.phase}</strong>
-                  <small>{route.sites}</small>
-                  {route.next && (
-                    <span className="route-next">
-                      <ArrowRight size={13} aria-hidden="true" /> {route.next}
-                    </span>
-                  )}
-                </div>
-                <b>{count}</b>
-              </div>
-            );
-          })}
-        </div>
-        <div className="process-rule-note">
-          <Microscope size={17} aria-hidden="true" />
-          <span>
-            Pokud je při příjmu doložena biopsie z externího pracoviště, druhá biopsie se
-            neplánuje a pacient pokračuje do stagingu.
-          </span>
-        </div>
-      </section>
     </>
   );
 }
@@ -922,6 +984,8 @@ function PatientsView({
   openPatient,
   openNewPatient,
   allowPatientCreation,
+  phaseFilter,
+  clearPhaseFilter,
 }: {
   patients: Patient[];
   query: string;
@@ -929,31 +993,44 @@ function PatientsView({
   openPatient: (id: string) => void;
   openNewPatient: () => void;
   allowPatientCreation: boolean;
+  phaseFilter: PatientPhaseFilter | null;
+  clearPhaseFilter: () => void;
 }) {
   const filteredPatients = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("cs-CZ");
-    if (!normalized) return patients;
-    return patients.filter((patient) =>
-      [
-        patient.firstName,
-        patient.lastName,
-        patient.primaryDiagnosisCode,
-        patient.primaryDiagnosisLabel,
-        patient.physician,
-      ]
-        .join(" ")
-        .toLocaleLowerCase("cs-CZ")
-        .includes(normalized),
-    );
-  }, [patients, query]);
+    return patients.filter((patient) => {
+      if (phaseFilter && !phaseFilter.phases.includes(patient.phase)) return false;
+      if (!normalized) return true;
+      return [
+          patient.firstName,
+          patient.lastName,
+          patient.birthNumber,
+          patient.primaryDiagnosisCode,
+          patient.primaryDiagnosisLabel,
+          patient.physician,
+        ]
+          .join(" ")
+          .toLocaleLowerCase("cs-CZ")
+          .includes(normalized);
+    });
+  }, [patients, phaseFilter, query]);
+
+  const clearFilters = () => {
+    setQuery("");
+    clearPhaseFilter();
+  };
 
   return (
     <>
       <div className="page-heading heading-with-action">
         <div>
           <p className="eyebrow">Evidence pacientů</p>
-          <h1>Pacienti</h1>
-          <p>Aktivní onkologické epizody a jejich aktuální fáze.</p>
+          <h1>{phaseFilter ? phaseFilter.label : "Pacienti"}</h1>
+          <p>
+            {phaseFilter
+              ? "Pacienti v této aktuální fázi onkologického procesu."
+              : "Aktivní onkologické epizody a jejich aktuální fáze."}
+          </p>
         </div>
         {allowPatientCreation ? (
           <button className="button button-primary" type="button" onClick={openNewPatient}>
@@ -971,7 +1048,7 @@ function PatientsView({
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Hledat podle jména, diagnózy nebo lékaře…"
+              placeholder="Hledat podle jména, r. č., diagnózy nebo lékaře…"
             />
             {query && (
               <button type="button" aria-label="Vymazat vyhledávání" onClick={() => setQuery("")}>
@@ -979,6 +1056,12 @@ function PatientsView({
               </button>
             )}
           </label>
+          {phaseFilter ? (
+            <button className="phase-filter-chip" type="button" onClick={clearPhaseFilter}>
+              Fáze: {phaseFilter.label}
+              <X size={14} aria-hidden="true" />
+            </button>
+          ) : null}
           <div className="directory-count">
             <strong>{filteredPatients.length}</strong> z {patients.length} pacientů
           </div>
@@ -1011,7 +1094,7 @@ function PatientsView({
                             {patient.firstName} {patient.lastName}
                           </strong>
                           <span>
-                            {calculateAge(patient.dateOfBirth)} let · {patient.birthNumberMasked}
+                            {calculateAge(patient.dateOfBirth)} let · r. č. {patient.birthNumber}
                           </span>
                         </div>
                       </div>
@@ -1065,7 +1148,7 @@ function PatientsView({
                         {patient.firstName} {patient.lastName}
                       </strong>
                       <span>
-                        {calculateAge(patient.dateOfBirth)} let · {patient.birthNumberMasked}
+                        {calculateAge(patient.dateOfBirth)} let · r. č. {patient.birthNumber}
                       </span>
                     </div>
                     <ChevronRight size={20} aria-hidden="true" />
@@ -1090,7 +1173,7 @@ function PatientsView({
           <EmptyState
             title="Žádný pacient neodpovídá filtru"
             description="Zkuste upravit hledaný výraz nebo zobrazit celý seznam."
-            onAction={() => setQuery("")}
+            onAction={clearFilters}
           />
         )}
       </section>
@@ -1129,7 +1212,7 @@ function PatientDetail({
               <span className="demo-chip">DEMO</span>
             </div>
             <div className="patient-meta-line">
-              <span>{patient.birthNumberMasked}</span>
+              <span>r. č. {patient.birthNumber}</span>
               <span>nar. {formatLongDate(patient.dateOfBirth)}</span>
               <span>{calculateAge(patient.dateOfBirth)} let</span>
             </div>
@@ -1520,9 +1603,11 @@ function AuditView() {
 }
 
 function NewPatientModal({
+  currentUser,
   onClose,
   onCreate,
 }: {
+  currentUser: string;
   onClose: () => void;
   onCreate: (patient: Patient) => void;
 }) {
@@ -1614,7 +1699,7 @@ function NewPatientModal({
       date: intakeDate,
       title: "Přijetí pacienta do péče",
       description: `Hlavní diagnóza ${selectedDiagnosis.code} – ${selectedDiagnosis.label}.`,
-      author: "Andrej Demo",
+      author: currentUser,
       status: "Dokončeno",
     };
     const events: TimelineEvent[] = biopsyAlreadyCompleted
@@ -1634,7 +1719,7 @@ function NewPatientModal({
                     : ""
                 } Druhá biopsie se neplánuje; další krok je staging.`
               : `${biopsyStatus}. Druhá biopsie se neplánuje; další krok je staging.`,
-            author: "Andrej Demo",
+            author: currentUser,
             status: "Dokončeno",
           },
           intakeEvent,
@@ -1646,7 +1731,7 @@ function NewPatientModal({
       initials: `${firstName.trim()[0]}${lastName.trim()[0]}`.toLocaleUpperCase("cs-CZ"),
       firstName: firstName.trim(),
       lastName: lastName.trim(),
-      birthNumberMasked: maskBirthNumber(birthNumber),
+      birthNumber: formatBirthNumber(birthNumber),
       dateOfBirth: birthNumberResult.date,
       primaryDiagnosisCode: selectedDiagnosis.code,
       primaryDiagnosisLabel: selectedDiagnosis.label,
@@ -1662,7 +1747,7 @@ function NewPatientModal({
       recurrence: false,
       phase: biopsyAlreadyCompleted ? "Staging" : "Biopsie",
       progress: biopsyAlreadyCompleted ? 40 : 20,
-      physician: "Andrej Demo",
+      physician: currentUser,
       nextStep: biopsyAlreadyCompleted ? "Naplánovat staging" : "Naplánovat biopsii",
       nextStepDate: "2026-09-08",
       priority: "Běžná",
@@ -2399,10 +2484,12 @@ function AdvancePatientModal({
 
 function NewEventModal({
   patient,
+  currentUser,
   onClose,
   onCreate,
 }: {
   patient: Patient;
+  currentUser: string;
   onClose: () => void;
   onCreate: (event: TimelineEvent) => void;
 }) {
@@ -2431,7 +2518,7 @@ function NewEventModal({
       time: time || undefined,
       title: title.trim(),
       description: description.trim() || "Bez doplňující poznámky.",
-      author: "Andrej Demo",
+      author: currentUser,
       status,
     });
   };

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
@@ -17,6 +17,7 @@ requireCondition(manifest.scope === "/", "manifest scope must be /");
 requireCondition(manifest.display === "standalone", "manifest display must be standalone");
 requireCondition(index.includes('rel="manifest"'), "index.html does not link the manifest");
 requireCondition(index.includes("/sw.js"), "index.html does not register the service worker");
+requireCondition(index.includes("Přihlášení"), "index.html does not render the login gate");
 requireCondition(
   serviceWorker.includes(`const CACHE_VERSION = "${packageJson.version}"`),
   "service-worker cache version does not match package.json",
@@ -34,6 +35,24 @@ const localAssets = Array.from(index.matchAll(/(?:src|href)="([^"]+)"/g))
 
 for (const asset of localAssets) {
   requireCondition(existsSync(join(output, asset)), `referenced asset is missing: ${asset}`);
+}
+
+function collectTextAssets(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return collectTextAssets(path);
+    if (!statSync(path).isFile() || !/\.(?:css|html|js|json|map|txt|webmanifest)$/.test(path)) {
+      return [];
+    }
+    return [path];
+  });
+}
+
+for (const path of collectTextAssets(output)) {
+  requireCondition(
+    !readFileSync(path, "utf8").includes("onkouvn1"),
+    `plaintext pilot password leaked into exported asset: ${path}`,
+  );
 }
 
 console.log(`PWA export verified for OnkoFlow ${packageJson.version}.`);
