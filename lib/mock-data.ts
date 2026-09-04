@@ -571,5 +571,5 @@ export const processSummarySteps: Array<{
     tone: 5,
     kind: "phase",
   },
-  { number: "6", label: "Recidiva", phases: ["Recidiva"], tone: 6, kind: "phase" },
+  { number: "↻", label: "Recidiva", phases: ["Recidiva"], tone: 6, kind: "phase" },
 ];

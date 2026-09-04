@@ -189,5 +189,5 @@ export const processSummarySteps: Array<{
     phases: ["Terapie", "Primární operace", "Neoadjuvantní léčba", "Paliace"],
     tone: 5,
   },
-  { number: "6", label: "Recidiva", phases: ["Recidiva"], tone: 6 },
+  { number: "↻", label: "Recidiva", phases: ["Recidiva"], tone: 6 },
 ];

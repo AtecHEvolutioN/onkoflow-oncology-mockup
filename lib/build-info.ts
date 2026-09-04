@@ -2,7 +2,7 @@ export type OnkoFlowMode = "production" | "department";
 
 export const buildInfo = {
   application: "OnkoFlow",
-  version: "0.7.2",
+  version: "0.8.0",
   schemaVersion: 2,
   mode:
     process.env.NEXT_PUBLIC_ONKOFLOW_MODE === "department"

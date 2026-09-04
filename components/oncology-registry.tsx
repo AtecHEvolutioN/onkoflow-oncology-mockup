@@ -34,7 +34,7 @@ import {
   X,
 } from "lucide-react";
 import Image from "next/image";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { StorageDiagnostics } from "@/components/storage-diagnostics";
 import { LoginScreen, type OnkoFlowSession } from "@/components/login-screen";
 import {
@@ -77,6 +77,7 @@ type View = "dashboard" | "patients" | "patient" | "tasks" | "audit" | "storage"
 type PatientPhaseFilter = {
   label: string;
   phases: CarePhase[];
+  treatmentRoutes?: TreatmentRoute[];
 };
 
 type BirthNumberResult = {
@@ -203,6 +204,176 @@ function deriveTasks(patients: Patient[]) {
     );
     return hasMatchingEvent ? eventTasks : [createNextStepTask(patient), ...eventTasks];
   });
+}
+
+type DashboardActionTone = "critical" | "warning" | "today" | "ready" | "scheduled";
+
+type DashboardAction = {
+  id: string;
+  patientId: string;
+  patientName: string;
+  diagnosis: string;
+  stage: MajorStage | "Recidiva";
+  title: string;
+  timing: string;
+  date: string;
+  tone: DashboardActionTone;
+};
+
+const DASHBOARD_TONE_PRIORITY: Record<DashboardActionTone, number> = {
+  critical: 0,
+  today: 1,
+  warning: 2,
+  ready: 3,
+  scheduled: 4,
+};
+
+function calendarDayDifference(date: string, today: string) {
+  if (!date) return null;
+  const target = Date.parse(`${date}T12:00:00Z`);
+  const origin = Date.parse(`${today}T12:00:00Z`);
+  if (!Number.isFinite(target) || !Number.isFinite(origin)) return null;
+  return Math.round((target - origin) / 86_400_000);
+}
+
+function czechDayCount(days: number) {
+  const absolute = Math.abs(days);
+  const lastTwo = absolute % 100;
+  const last = absolute % 10;
+  if (absolute === 1) return "1 den";
+  if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) return `${absolute} dny`;
+  return `${absolute} dní`;
+}
+
+function relativeDateLabel(date: string, today: string) {
+  const difference = calendarDayDifference(date, today);
+  if (difference === null) return "Termín neurčen";
+  if (difference === 0) return "DNES";
+  if (difference === 1) return "zítra";
+  if (difference > 1) return `za ${difference} dní`;
+  return `po termínu ${czechDayCount(difference)}`;
+}
+
+function getPatientDashboardAction(patient: Patient, today: string): DashboardAction | null {
+  const patientName = `${patient.lastName} ${patient.firstName}`;
+  const makeAction = (
+    stage: DashboardAction["stage"],
+    title: string,
+    date: string,
+    tone: DashboardActionTone,
+    timing = relativeDateLabel(date, today),
+  ) => ({
+    id: `${patient.id}-${stage}-${title}`,
+    patientId: patient.id,
+    patientName,
+    diagnosis: patient.primaryDiagnosisCode,
+    stage,
+    title,
+    timing,
+    date,
+    tone,
+  });
+
+  if (patient.phase === "Příjem") {
+    const difference = calendarDayDifference(patient.nextStepDate, today);
+    return makeAction(
+      "Příjem",
+      "Dokončit příjem pacientky",
+      patient.nextStepDate,
+      difference !== null && difference < 0 ? "critical" : "warning",
+    );
+  }
+
+  if (patient.phase === "Biopsie" || patient.phase === "Čekání na výsledek biopsie") {
+    const biopsy = patient.biopsyResult;
+    if (!biopsy?.date) return makeAction("Biopsie", "Biopsie nenaplánována", "", "warning");
+    if (biopsy.conclusion.trim()) {
+      return makeAction("Biopsie", "Výsledek k dispozici — pokračovat do stagingu", biopsy.date, "ready", "Výsledek doplněn");
+    }
+    const difference = calendarDayDifference(biopsy.date, today) ?? 0;
+    if (difference > 0) return makeAction("Biopsie", "Naplánovaná biopsie", biopsy.date, "scheduled");
+    if (difference === 0) return makeAction("Biopsie", "Biopsie dnes", biopsy.date, "today", "DNES");
+    const waitingDays = Math.abs(difference);
+    return makeAction(
+      "Biopsie",
+      "Čeká na výsledek histologie",
+      biopsy.date,
+      waitingDays > 7 ? "critical" : "warning",
+      `čeká ${czechDayCount(waitingDays)}`,
+    );
+  }
+
+  if (patient.phase === "Staging" || patient.phase === "Čekání na výsledky stagingu") {
+    const examinations = getPatientStagingDetails(patient);
+    if (!examinations.length) {
+      return makeAction("Staging", "Vybrat stagingová vyšetření", "", "warning");
+    }
+    const pending = examinations
+      .filter((item) => !item.result.trim())
+      .map((item) => {
+        if (!item.date) return makeAction("Staging", `${item.name}: termín neurčen`, "", "warning");
+        const difference = calendarDayDifference(item.date, today) ?? 0;
+        if (difference > 0) return makeAction("Staging", item.name, item.date, "scheduled");
+        if (difference === 0) return makeAction("Staging", `${item.name}: vyšetření dnes`, item.date, "today", "DNES");
+        const waitingDays = Math.abs(difference);
+        return makeAction(
+          "Staging",
+          `${item.name}: čeká na výsledek`,
+          item.date,
+          waitingDays > 7 ? "critical" : "warning",
+          `čeká ${czechDayCount(waitingDays)}`,
+        );
+      });
+    if (!pending.length) {
+      return makeAction("Staging", "Staging kompletní — naplánovat MDT", "", "ready", "Připraveno k MDT");
+    }
+    return pending.sort(
+      (a, b) =>
+        DASHBOARD_TONE_PRIORITY[a.tone] - DASHBOARD_TONE_PRIORITY[b.tone] ||
+        a.date.localeCompare(b.date),
+    )[0];
+  }
+
+  if (patient.phase === "MDT") {
+    if (!patient.mdtDate) return makeAction("MDT", "Naplánovat MDT", "", "warning");
+    if (patient.mdtConclusion?.trim()) {
+      return makeAction("MDT", "Zvolit nebo potvrdit terapii", patient.mdtDate, "ready", "Závěr doplněn");
+    }
+    const difference = calendarDayDifference(patient.mdtDate, today) ?? 0;
+    if (difference > 0) return makeAction("MDT", "Naplánované MDT", patient.mdtDate, difference === 1 ? "warning" : "scheduled");
+    if (difference === 0) return makeAction("MDT", "MDT dnes", patient.mdtDate, "today", "DNES");
+    const waitingDays = Math.abs(difference);
+    return makeAction(
+      "MDT",
+      "Čeká na závěr MDT",
+      patient.mdtDate,
+      "critical",
+      `čeká ${czechDayCount(waitingDays)}`,
+    );
+  }
+
+  if (patient.phase === "Recidiva") {
+    return makeAction("Recidiva", "Zahájit restaging recidivy", patient.nextStepDate, "critical");
+  }
+
+  if (
+    patient.phase === "Terapie" ||
+    patient.phase === "Primární operace" ||
+    patient.phase === "Neoadjuvantní léčba" ||
+    patient.phase === "Paliace"
+  ) {
+    const difference = calendarDayDifference(patient.nextStepDate, today);
+    const tone = difference === null
+      ? "warning"
+      : difference < 0
+        ? "critical"
+        : difference === 0
+          ? "today"
+          : "scheduled";
+    return makeAction("Terapie", patient.nextStep, patient.nextStepDate, tone);
+  }
+
+  return null;
 }
 
 function parseBirthNumber(value: string): BirthNumberResult {
@@ -416,7 +587,7 @@ function PatientPathway({
       </div>
 
       <div className={`recurrence-route ${patient.recurrence ? "active" : ""}`}>
-        <span>6</span>
+        <span>↻</span>
         <div>
           <strong>Recidiva</strong>
           <small>
@@ -529,9 +700,20 @@ export function OncologyRegistry() {
     if (view === "patients") setPatientPhaseFilter(null);
   };
 
-  const openPatientCategory = (label: string, phases: CarePhase[]) => {
-    setPatientPhaseFilter({ label, phases });
+  const openPatientCategory = (
+    label: string,
+    phases: CarePhase[],
+    treatmentRoutes?: TreatmentRoute[],
+  ) => {
+    setPatientPhaseFilter({ label, phases, treatmentRoutes });
     setSearchQuery("");
+    if (activeView !== "patients") setViewHistory((current) => [...current, activeView]);
+    setActiveView("patients");
+    setSidebarOpen(false);
+  };
+
+  const openPatientSearch = () => {
+    setPatientPhaseFilter(null);
     if (activeView !== "patients") setViewHistory((current) => [...current, activeView]);
     setActiveView("patients");
     setSidebarOpen(false);
@@ -728,17 +910,19 @@ export function OncologyRegistry() {
             const active =
               activeView === item.id || (item.id === "patients" && activeView === "patient");
             return (
-              <button
-                className={`nav-item ${active ? "active" : ""}`}
-                key={item.id}
-                type="button"
-                onClick={() => navigate(item.id)}
-                aria-current={active ? "page" : undefined}
-              >
-                <Icon size={19} aria-hidden="true" />
-                <span>{item.label}</span>
-                {item.id === "tasks" ? <span className="nav-count">{tasks.length}</span> : null}
-              </button>
+              <Fragment key={item.id}>
+                {item.id === "storage" ? <p className="nav-label nav-label-admin">Správa</p> : null}
+                <button
+                  className={`nav-item ${active ? "active" : ""}`}
+                  type="button"
+                  onClick={() => navigate(item.id)}
+                  aria-current={active ? "page" : undefined}
+                >
+                  <Icon size={20} aria-hidden="true" />
+                  <span>{item.label}</span>
+                  {item.id === "tasks" ? <span className="nav-count">{tasks.length}</span> : null}
+                </button>
+              </Fragment>
             );
           })}
         </nav>
@@ -806,6 +990,23 @@ export function OncologyRegistry() {
             <span>Gynekologická onkologie</span>
             <strong>{currentViewLabel}</strong>
           </div>
+          <form
+            className="topbar-search"
+            role="search"
+            onSubmit={(event) => {
+              event.preventDefault();
+              openPatientSearch();
+            }}
+          >
+            <Search size={19} aria-hidden="true" />
+            <label className="sr-only" htmlFor="global-patient-search">Hledat pacientku</label>
+            <input
+              id="global-patient-search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Hledat jméno, RČ nebo diagnózu…"
+            />
+          </form>
           <div className="topbar-actions">
             <div className="topbar-session" title={`Datová složka: ${session.directoryName}`}>
               <span className="avatar avatar-tiny">
@@ -846,7 +1047,6 @@ export function OncologyRegistry() {
               openPatient={openPatient}
               navigate={navigate}
               openPatientCategory={openPatientCategory}
-              openNewPatient={() => setIsNewPatientOpen(true)}
             />
           )}
           {activeView === "patients" && (
@@ -961,42 +1161,118 @@ function DashboardView({
   openPatient,
   navigate,
   openPatientCategory,
-  openNewPatient,
 }: {
   patients: Patient[];
   tasks: CareTask[];
   openPatient: (id: string) => void;
   navigate: (view: View) => void;
-  openPatientCategory: (label: string, phases: CarePhase[]) => void;
-  openNewPatient: () => void;
+  openPatientCategory: (
+    label: string,
+    phases: CarePhase[],
+    treatmentRoutes?: TreatmentRoute[],
+  ) => void;
 }) {
-  const highPriority = patients.filter((patient) => patient.priority === "Vysoká").length;
-  const inTreatment = patients.filter(
-    (patient) =>
-      patient.phase === "Terapie" ||
-      patient.phase === "Primární operace" ||
-      patient.phase === "Neoadjuvantní léčba" ||
-      patient.phase === "Paliace",
-  ).length;
-  const recentPatients = patients.slice(0, 4);
-  const upcomingTasks = useMemo(
-    () => [...tasks].sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`)),
-    [tasks],
-  );
   const today = todayIso();
+  const dashboardActions = useMemo(
+    () =>
+      patients
+        .map((patient) => getPatientDashboardAction(patient, today))
+        .filter((action): action is DashboardAction => Boolean(action))
+        .sort(
+          (a, b) =>
+            DASHBOARD_TONE_PRIORITY[a.tone] - DASHBOARD_TONE_PRIORITY[b.tone] ||
+            (a.date || "9999-12-31").localeCompare(b.date || "9999-12-31") ||
+            a.patientName.localeCompare(b.patientName, "cs-CZ"),
+        ),
+    [patients, today],
+  );
+  const actionable = dashboardActions.filter((action) => action.tone !== "scheduled");
+  const visibleActions = [...actionable, ...dashboardActions.filter((action) => action.tone === "scheduled")].slice(0, 5);
+  const overdueCount = dashboardActions.filter((action) =>
+    action.timing.toLocaleLowerCase("cs-CZ").startsWith("po termínu"),
+  ).length;
+  const waitingResultCount = dashboardActions.filter((action) =>
+    action.title.toLocaleLowerCase("cs-CZ").includes("čeká na výsledek") ||
+    action.title.toLocaleLowerCase("cs-CZ").includes("čeká na závěr"),
+  ).length;
+  const mdtToday = patients.filter((patient) => patient.mdtDate === today).length;
+  const upcomingTasks = useMemo(
+    () =>
+      [...tasks]
+        .filter((task) => task.date >= today)
+        .sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`)),
+    [tasks, today],
+  );
+  const dashboardPatients = [...patients]
+    .sort((a, b) => {
+      const actionA = dashboardActions.find((action) => action.patientId === a.id);
+      const actionB = dashboardActions.find((action) => action.patientId === b.id);
+      return (
+        (actionA ? DASHBOARD_TONE_PRIORITY[actionA.tone] : 9) -
+          (actionB ? DASHBOARD_TONE_PRIORITY[actionB.tone] : 9) ||
+        (actionA?.date || "9999-12-31").localeCompare(actionB?.date || "9999-12-31")
+      );
+    })
+    .slice(0, 7);
   const todayLabel = new Intl.DateTimeFormat("cs-CZ", {
     weekday: "long",
     day: "numeric",
     month: "long",
     year: "numeric",
   }).format(new Date(`${today}T12:00:00`));
-  const mdtToday = tasks.filter(
-    (task) => task.date === today && task.title.toLocaleLowerCase("cs-CZ").includes("mdt"),
-  ).length;
+
+  const getStageStatusLines = (label: string, stagePatients: Patient[]) => {
+    if (!stagePatients.length) return ["Bez aktivních případů"];
+    if (label === "Příjem") return [`${stagePatients.length} k dokončení příjmu`];
+    if (label === "Biopsie") {
+      const statuses = stagePatients.map((patient) => getBiopsyStatus(patient, today));
+      const rows = [
+        ["Čekání na termín biopsie", "čekají na termín"],
+        ["Dnes biopsie", "biopsie dnes"],
+        ["Čekání na výsledek biopsie", "čekají na histologii"],
+        ["Biopsie nenaplánována", "bez termínu"],
+      ] as const;
+      return rows
+        .map(([status, description]) => ({ count: statuses.filter((item) => item === status).length, description }))
+        .filter((row) => row.count)
+        .map((row) => `${row.count} ${row.description}`)
+        .slice(0, 3);
+    }
+    if (label === "Staging") {
+      const examinations = stagePatients.flatMap(getPatientStagingDetails);
+      const withoutDate = examinations.filter((item) => !item.date && !item.result.trim()).length;
+      const todayExaminations = examinations.filter((item) => item.date === today && !item.result.trim()).length;
+      const waiting = examinations.filter(
+        (item) => item.date && item.date < today && !item.result.trim(),
+      ).length;
+      const rows = [
+        [todayExaminations, "vyšetření dnes"],
+        [waiting, "čekají na výsledky"],
+        [withoutDate, "bez termínu"],
+      ] as const;
+      const result = rows.filter(([count]) => count).map(([count, description]) => `${count} ${description}`);
+      return result.length ? result : [`${stagePatients.length} staging dokončen`];
+    }
+    if (label === "MDT") {
+      const statuses = stagePatients.map((patient) => getMdtStatus(patient, today));
+      const todayCount = statuses.filter((status) => status === "MDT dnes").length;
+      const awaiting = statuses.filter((status) => status === "Čekání na MDT").length;
+      const conclusion = statuses.filter((status) => status === "Čekání na závěr MDT").length;
+      const result = [
+        [todayCount, "MDT dnes"],
+        [awaiting, "čekají na MDT"],
+        [conclusion, "čekají na závěr"],
+      ]
+        .filter(([count]) => count)
+        .map(([count, description]) => `${count} ${description}`);
+      return result.length ? result : ["Termín MDT neurčen"];
+    }
+    return [];
+  };
 
   return (
     <>
-      <div className="page-heading heading-with-action">
+      <div className="page-heading heading-with-action dashboard-heading">
         <div>
           <p className="eyebrow">{todayLabel}</p>
           <h1>Přehled péče</h1>
@@ -1008,7 +1284,34 @@ function DashboardView({
         </button>
       </div>
 
-      <section className="panel process-panel process-panel-top">
+      <div className="metric-grid operational-metrics">
+        <button className="metric-card metric-action" type="button" onClick={() => navigate("patients")}>
+          <div className="metric-icon metric-red"><AlertTriangle size={24} aria-hidden="true" /></div>
+          <span className="metric-label">Vyžaduje akci</span>
+          <strong>{actionable.length}</strong>
+          <span className="metric-caption">aktivní klinické kroky</span>
+        </button>
+        <button className="metric-card metric-overdue" type="button" onClick={() => navigate("tasks")}>
+          <div className="metric-icon metric-red"><Clock3 size={24} aria-hidden="true" /></div>
+          <span className="metric-label">Po termínu</span>
+          <strong>{overdueCount}</strong>
+          <span className="metric-caption">nutno zkontrolovat</span>
+        </button>
+        <button className="metric-card" type="button" onClick={() => navigate("tasks")}>
+          <div className="metric-icon metric-violet"><UsersRound size={24} aria-hidden="true" /></div>
+          <span className="metric-label">MDT dnes</span>
+          <strong>{mdtToday}</strong>
+          <span className="metric-caption">pacientek k projednání</span>
+        </button>
+        <button className="metric-card" type="button" onClick={() => navigate("patients")}>
+          <div className="metric-icon metric-blue"><FileCheck2 size={24} aria-hidden="true" /></div>
+          <span className="metric-label">Čeká na výsledek</span>
+          <strong>{waitingResultCount}</strong>
+          <span className="metric-caption">histologie, staging nebo MDT</span>
+        </button>
+      </div>
+
+      <section className="panel process-panel process-panel-top operational-process">
         <div className="panel-header">
           <div>
             <h2>Proces onkologické péče</h2>
@@ -1023,49 +1326,51 @@ function DashboardView({
             <div className="process-tree-main process-tree-main-stages-only">
               <div className="process-tree-flow">
                 {processSummarySteps.slice(0, -1).map((step) => {
-                  const count = patients.filter((patient) =>
-                    step.phases.includes(patient.phase),
-                  ).length;
+                  const stagePatients = patients.filter((patient) => step.phases.includes(patient.phase));
+                  const count = stagePatients.length;
                   const detail =
                     corePathwaySteps.find((coreStep) => coreStep.phase === step.phases[0])
                       ?.detail ?? step.description;
+                  const statusLines = getStageStatusLines(step.label, stagePatients);
 
                   return (
-                    <button
+                    <div
                       className="process-tree-node"
-                      type="button"
                       key={step.number}
-                      onClick={() =>
-                        step.label === "Příjem"
-                          ? openNewPatient()
-                          : openPatientCategory(step.label, step.phases)
-                      }
-                      aria-label={
-                        step.label === "Příjem"
-                          ? "Přijmout nového pacienta do péče"
-                          : `${step.label}: ${count} pacientů. Otevřít seznam.`
-                      }
                     >
-                      <span className="process-tree-node-head">
-                        <span className={`phase-number phase-number-${step.tone}`}>
-                          {step.number}
+                      <button
+                        className="process-tree-node-main"
+                        type="button"
+                        onClick={() => openPatientCategory(step.label, step.phases)}
+                        aria-label={`${step.label}: ${count} pacientů. Otevřít seznam.`}
+                      >
+                        <span className="process-tree-node-head">
+                          <span className={`phase-number phase-number-${step.tone}`}>{step.number}</span>
+                          <span className="process-tree-count"><b>{count}</b></span>
                         </span>
-                        <span className="process-tree-count">
-                          <b>{count}</b> pac.
-                        </span>
-                      </span>
-                      <strong>{step.label}</strong>
-                      {detail ? <small>{detail}</small> : null}
+                        <strong>{step.label}</strong>
+                        {detail ? <small>{detail}</small> : null}
+                        {step.label !== "Terapie" ? (
+                          <span className="process-stage-statuses">
+                            {statusLines.map((line) => <span key={line}>{line}</span>)}
+                          </span>
+                        ) : null}
+                      </button>
                       {step.label === "Terapie" ? (
                         <span className="process-therapy-modifiers" aria-label="Modifikátory terapie">
                           {treatmentRoutes.map((route) => (
-                            <span key={route.code}>
-                              {route.label} · {patients.filter((patient) => patient.treatmentRoute === route.label).length}
-                            </span>
+                            <button
+                              type="button"
+                              key={route.code}
+                              onClick={() => openPatientCategory(route.label, step.phases, [route.label])}
+                            >
+                              <span>{route.label}</span>
+                              <b>{patients.filter((patient) => patient.treatmentRoute === route.label).length}</b>
+                            </button>
                           ))}
                         </span>
                       ) : null}
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -1078,7 +1383,7 @@ function DashboardView({
               return (
                 <div className="process-tree-recurrence" key={step.number}>
                   <span className="process-tree-return-copy">
-                    <ArrowLeft size={15} aria-hidden="true" /> Restaging zpět do stagingu
+                    <ArrowLeft size={17} aria-hidden="true" /> Nová epizoda · restaging
                   </span>
                   <span className="process-tree-return-line" aria-hidden="true" />
                   <button
@@ -1087,11 +1392,9 @@ function DashboardView({
                     onClick={() => openPatientCategory(step.label, step.phases)}
                     aria-label={`${step.label}: ${count} pacientů. Otevřít seznam.`}
                   >
-                    <span className={`phase-number phase-number-${step.tone}`}>
-                      {step.number}
-                    </span>
+                    <History size={18} aria-hidden="true" />
                     <strong>{step.label}</strong>
-                    <b>{count} pac.</b>
+                    <b>{count}</b>
                   </button>
                 </div>
               );
@@ -1106,83 +1409,41 @@ function DashboardView({
         </div>
       </section>
 
-      <div className="metric-grid">
-        <button className="metric-card" type="button" onClick={() => navigate("patients")}>
-          <div className="metric-icon metric-blue">
-            <Users size={21} aria-hidden="true" />
-          </div>
-          <span className="metric-label">Aktivní pacienti</span>
-          <strong>{patients.length}</strong>
-          <span className="metric-caption">v registru</span>
-        </button>
-        <button className="metric-card" type="button" onClick={() => navigate("patients")}>
-          <div className="metric-icon metric-red">
-            <AlertTriangle size={21} aria-hidden="true" />
-          </div>
-          <span className="metric-label">Vyšší priorita</span>
-          <strong>{highPriority}</strong>
-          <span className="metric-caption">vyžadují pozornost</span>
-        </button>
-        <button className="metric-card" type="button" onClick={() => navigate("tasks")}>
-          <div className="metric-icon metric-violet">
-            <UsersRound size={21} aria-hidden="true" />
-          </div>
-          <span className="metric-label">MDT dnes</span>
-          <strong>{mdtToday}</strong>
-          <span className="metric-caption">naplánované termíny</span>
-        </button>
-        <button className="metric-card" type="button" onClick={() => navigate("patients")}>
-          <div className="metric-icon metric-teal">
-            <Activity size={21} aria-hidden="true" />
-          </div>
-          <span className="metric-label">V aktivní léčbě</span>
-          <strong>{inTreatment}</strong>
-          <span className="metric-caption">probíhající léčba</span>
-        </button>
-      </div>
-
-      <div className="dashboard-grid">
+      <div className="dashboard-grid operational-dashboard-grid">
         <section className="panel patients-panel">
           <div className="panel-header">
             <div>
-              <h2>Naposledy aktualizovaní pacienti</h2>
-              <p>Rychlý přístup k probíhajícím epizodám péče.</p>
+              <h2>Vyžaduje akci</h2>
+              <p>Automaticky seřazeno podle naléhavosti a termínu.</p>
             </div>
             <button className="text-button" type="button" onClick={() => navigate("patients")}>
-              Všichni pacienti <ChevronRight size={16} aria-hidden="true" />
+              Zobrazit všechny <ChevronRight size={18} aria-hidden="true" />
             </button>
           </div>
           <div className="patient-list-compact">
-            {recentPatients.length ? recentPatients.map((patient) => (
+            {visibleActions.length ? visibleActions.map((action) => (
               <button
-                className="patient-compact-row"
-                key={patient.id}
+                className={`patient-compact-row action-queue-row action-${action.tone}`}
+                key={action.id}
                 type="button"
-                onClick={() => openPatient(patient.id)}
+                onClick={() => openPatient(action.patientId)}
               >
-                <div className="avatar">{patient.initials}</div>
-                <div className="patient-compact-main">
-                  <div className="patient-name-line">
-                    <strong>
-                      {patient.firstName} {patient.lastName}
-                    </strong>
-                    {patient.priority === "Vysoká" && <span className="priority-dot" />}
-                  </div>
-                  <span>
-                    {patient.primaryDiagnosisCode} · {patient.primaryDiagnosisLabel}
-                  </span>
+                <span className="action-indicator" aria-hidden="true" />
+                <div className="action-patient">
+                  <strong>{action.patientName}</strong>
+                  <span>{action.diagnosis} · {action.stage}</span>
                 </div>
-                <PhaseBadge phase={patient.phase} treatmentRoute={patient.treatmentRoute} />
-                <div className="next-step-cell">
-                  <span>{patient.nextStep}</span>
-                  <strong>{formatDate(patient.nextStepDate)}</strong>
+                <div className="action-description">
+                  <strong>{action.title}</strong>
+                  {action.date ? <span>{formatDate(action.date)}</span> : null}
                 </div>
-                <ChevronRight className="row-chevron" size={18} aria-hidden="true" />
+                <span className={`date-status date-status-${action.tone}`}>{action.timing}</span>
+                <span className="action-open">Otevřít <ChevronRight size={18} aria-hidden="true" /></span>
               </button>
             )) : (
               <div className="empty-state compact-empty-state">
-                <h3>Registr zatím neobsahuje žádné pacienty</h3>
-                <p>První záznam vytvoříte tlačítkem Nový pacient.</p>
+                <h3>Žádná pacientka nyní nevyžaduje akci</h3>
+                <p>Aktuální termíny a čekající výsledky se zobrazí automaticky.</p>
               </div>
             )}
           </div>
@@ -1191,15 +1452,15 @@ function DashboardView({
         <section className="panel schedule-panel">
           <div className="panel-header">
             <div>
-              <h2>Nejbližší úkoly</h2>
-              <p>Dnešní a nadcházející termíny.</p>
+              <h2>Dnes / nejbližší termíny</h2>
+              <p>Chronologický přehled naplánovaných kroků.</p>
             </div>
             <button className="icon-button" type="button" aria-label="Otevřít úkoly" onClick={() => navigate("tasks")}>
               <ChevronRight size={18} />
             </button>
           </div>
           <div className="task-stack">
-            {upcomingTasks.length ? upcomingTasks.slice(0, 3).map((task) => (
+            {upcomingTasks.length ? upcomingTasks.slice(0, 4).map((task) => (
               <button className="task-card" key={task.id} type="button" onClick={() => openPatient(task.patientId)}>
                 <div className="task-date-block">
                   <strong>{new Date(`${task.date}T12:00:00`).getDate()}</strong>
@@ -1230,6 +1491,44 @@ function DashboardView({
         </section>
       </div>
 
+      <section className="panel dashboard-patient-directory">
+        <div className="panel-header">
+          <div>
+            <h2>Pacientky</h2>
+            <p>Aktivní případy seřazené podle naléhavosti dalšího kroku.</p>
+          </div>
+          <button className="text-button" type="button" onClick={() => navigate("patients")}>
+            Celý seznam <ChevronRight size={18} aria-hidden="true" />
+          </button>
+        </div>
+        {dashboardPatients.length ? (
+          <div className="dashboard-patient-table-wrap">
+            <table className="dashboard-patient-table">
+              <thead><tr><th>Pacientka</th><th>Diagnóza</th><th>Fáze</th><th>Stav</th><th>Další krok</th><th>Termín</th><th>Čeká</th><th /></tr></thead>
+              <tbody>
+                {dashboardPatients.map((patient) => {
+                  const action = dashboardActions.find((item) => item.patientId === patient.id);
+                  return (
+                    <tr key={patient.id} onClick={() => openPatient(patient.id)}>
+                      <td><strong>{patient.lastName} {patient.firstName}</strong><span>r. č. {patient.birthNumber}</span></td>
+                      <td><strong>{patient.primaryDiagnosisCode}</strong><span>{patient.primaryDiagnosisLabel}</span></td>
+                      <td><PhaseBadge phase={patient.phase} treatmentRoute={patient.treatmentRoute} /></td>
+                      <td>{action ? <span className={`table-status-dot table-status-${action.tone}`} aria-label={action.timing} /> : "—"}</td>
+                      <td><strong>{action?.title ?? patient.nextStep}</strong></td>
+                      <td>{action?.date ? <time dateTime={action.date}>{formatDate(action.date)}</time> : "—"}</td>
+                      <td>{action ? <span className={`date-status date-status-${action.tone}`}>{action.timing}</span> : "—"}</td>
+                      <td><ChevronRight size={19} aria-hidden="true" /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="empty-state compact-empty-state"><h3>Registr je prázdný</h3><p>Novou pacientku přidáte tlačítkem vpravo nahoře.</p></div>
+        )}
+      </section>
+
     </>
   );
 }
@@ -1256,6 +1555,12 @@ function PatientsView({
     return patients
       .filter((patient) => {
         if (phaseFilter && !phaseFilter.phases.includes(patient.phase)) return false;
+        if (
+          phaseFilter?.treatmentRoutes?.length &&
+          (!patient.treatmentRoute || !phaseFilter.treatmentRoutes.includes(patient.treatmentRoute))
+        ) {
+          return false;
+        }
         if (mdtDateFilter && patient.mdtDate !== mdtDateFilter) return false;
         if (!normalized) return true;
         return [
