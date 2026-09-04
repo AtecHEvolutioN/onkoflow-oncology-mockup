@@ -19,7 +19,6 @@ import {
   LayoutDashboard,
   ListChecks,
   LoaderCircle,
-  LockKeyhole,
   LogOut,
   Menu,
   Microscope,
@@ -529,11 +528,41 @@ function getPatientMajorStageIndex(patient: Patient) {
 function PatientPathway({
   patient,
   onSelectStage,
+  onAdvancePhase,
+  advanceAction,
 }: {
   patient: Patient;
   onSelectStage: (stage: MajorStage) => void;
+  onAdvancePhase: () => void;
+  advanceAction: ReturnType<typeof getWorkflowAdvanceAction>;
 }) {
   const currentCoreIndex = getPatientMajorStageIndex(patient);
+  const activeStage = corePathwaySteps[currentCoreIndex].phase;
+  const stagingDetails = getPatientStagingDetails(patient);
+  const activeStatus =
+    activeStage === "Příjem"
+      ? "Vstupní údaje jsou uloženy"
+      : activeStage === "Biopsie"
+        ? getBiopsyDisplayStatus(patient)
+        : activeStage === "Staging"
+          ? stagingDetails.length
+            ? getStagingDisplayStatus(patient)
+            : "Vyšetření nejsou vybrána"
+          : activeStage === "MDT"
+            ? getMdtDisplayStatus(patient)
+            : patient.treatmentRoute ?? "Léčebná strategie není určena";
+  const activeActionLabel =
+    activeStage === "Příjem" && advanceAction
+      ? advanceAction.label
+      : activeStage === "Biopsie"
+        ? "Otevřít / upravit biopsii"
+        : activeStage === "Staging"
+          ? stagingDetails.length
+            ? "Otevřít / upravit staging"
+            : "Vybrat stagingová vyšetření"
+          : activeStage === "MDT"
+            ? "Otevřít / upravit MDT"
+            : "Zobrazit léčebnou strategii";
 
   return (
     <div className="clinical-pathway">
@@ -568,34 +597,38 @@ function PatientPathway({
         })}
       </div>
 
-      <div className={`therapy-modifier ${patient.treatmentRoute ? "selected" : ""}`}>
-        <span className="therapy-modifier-label">Modifikátor terapie</span>
+      <div className="pathway-active-action" aria-live="polite">
         <div>
-          <strong>{patient.treatmentRoute ?? "Modifikátor terapie zatím nebyl určen"}</strong>
-          {patient.treatmentRoute ? (
-            <small>
-              {patient.treatmentSite ??
-                treatmentRoutes.find((route) => route.label === patient.treatmentRoute)?.sites}
-            </small>
-          ) : (
-            <small>Větev se zvolí v závěru MDT.</small>
-          )}
-        </div>
-        {patient.treatmentRoute ? (
-          <CircleCheck size={18} aria-label="Zvolený modifikátor terapie" />
-        ) : null}
-      </div>
-
-      <div className={`recurrence-route ${patient.recurrence ? "active" : ""}`}>
-        <span>↻</span>
-        <div>
-          <strong>Recidiva</strong>
+          <span>Aktuální krok · {activeStage}</span>
+          <strong>{activeStatus}</strong>
           <small>
-            {patient.recurrence
-              ? "Aktivní recidiva evidovaná v této epizodě"
-              : "Samostatně sledovaná větev procesu"}
+            {patient.nextStepDate
+              ? `Termín: ${formatLongDate(patient.nextStepDate)}`
+              : "Termín není určen"}
           </small>
         </div>
+        <button
+          className="button button-primary"
+          type="button"
+          onClick={
+            activeStage === "Příjem" && advanceAction
+              ? onAdvancePhase
+              : () => onSelectStage(activeStage)
+          }
+        >
+          {activeActionLabel}
+          <ArrowRight size={17} aria-hidden="true" />
+        </button>
+      </div>
+
+      <div className="pathway-secondary-status">
+        <button type="button" onClick={() => onSelectStage("Terapie")}>
+          Modifikátor terapie: <strong>{patient.treatmentRoute ?? "neurčen"}</strong>
+        </button>
+        <span aria-hidden="true">•</span>
+        <span>
+          Recidiva: <strong>{patient.recurrence ? "ano" : "ne"}</strong>
+        </span>
       </div>
     </div>
   );
@@ -1817,37 +1850,33 @@ function PatientDetail({
 }) {
   const advanceAction = getWorkflowAdvanceAction(patient);
   const patientStagingDetails = getPatientStagingDetails(patient);
-  const currentEditableStage: MajorStage | null =
-    patient.phase === "Biopsie" || patient.phase === "Čekání na výsledek biopsie"
-      ? "Biopsie"
-      : patient.phase === "Staging" || patient.phase === "Čekání na výsledky stagingu"
-        ? "Staging"
-        : patient.phase === "MDT"
-          ? "MDT"
-          : null;
+  const completedStagingCount = patientStagingDetails.filter(
+    (examination) => examination.date && examination.result.trim(),
+  ).length;
 
   return (
     <>
       <section className="patient-hero panel">
         <div className="patient-hero-main">
-          <div className="avatar avatar-large">{patient.initials}</div>
-          <div>
+          <div className="avatar patient-header-avatar">{patient.initials}</div>
+          <div className="patient-hero-identity">
             <div className="patient-hero-title">
               <h1>
                 {patient.firstName} {patient.lastName}
               </h1>
+              <PhaseBadge phase={patient.phase} treatmentRoute={patient.treatmentRoute} />
             </div>
             <div className="patient-meta-line">
-              <span>r. č. {patient.birthNumber}</span>
-              <span>nar. {formatLongDate(patient.dateOfBirth)}</span>
               <span>{calculateAge(patient.dateOfBirth)} let</span>
+              <span>r. č. {patient.birthNumber}</span>
+              <span>{patient.primaryDiagnosisCode} · {patient.primaryDiagnosisLabel}</span>
             </div>
           </div>
         </div>
         <div className="patient-hero-actions">
-          <button className="button button-primary" type="button" onClick={openNewEvent}>
+          <button className="button button-secondary" type="button" onClick={openNewEvent}>
             <Plus size={18} aria-hidden="true" />
-            Přidat událost
+            Nová událost
           </button>
         </div>
       </section>
@@ -1859,44 +1888,19 @@ function PatientDetail({
         <div className="panel-header patient-pathway-header">
           <div>
             <p className="eyebrow">Aktuální fáze pacienta</p>
-            <h2 id="patient-pathway-heading">Průběh onkologickou péčí</h2>
+            <h2 id="patient-pathway-heading">Průběh onkologické péče</h2>
           </div>
           <div className="patient-pathway-status">
             <PhaseBadge phase={patient.phase} treatmentRoute={patient.treatmentRoute} />
             <span className="progress-value">{patient.progress} % procesu</span>
           </div>
         </div>
-        <PatientPathway patient={patient} onSelectStage={openStage} />
-      </section>
-
-      <section className="mobile-next-action panel" aria-label="Nejbližší krok">
-        <span className="mobile-next-action-icon">
-          <CalendarDays size={20} aria-hidden="true" />
-        </span>
-        <div className="mobile-next-action-copy">
-          <span>Nejbližší krok</span>
-          <strong>{patient.nextStep}</strong>
-          <time dateTime={patient.nextStepDate}>{formatLongDate(patient.nextStepDate)}</time>
-        </div>
-        {currentEditableStage ? (
-          <button
-            className="button button-primary mobile-advance-button"
-            type="button"
-            onClick={() => openStage(currentEditableStage)}
-          >
-            Otevřít {currentEditableStage}
-            <ArrowRight size={17} aria-hidden="true" />
-          </button>
-        ) : advanceAction ? (
-          <button
-            className="button button-primary mobile-advance-button"
-            type="button"
-            onClick={openAdvancePhase}
-          >
-            {advanceAction.label}
-            <ArrowRight size={17} aria-hidden="true" />
-          </button>
-        ) : null}
+        <PatientPathway
+          patient={patient}
+          onSelectStage={openStage}
+          onAdvancePhase={openAdvancePhase}
+          advanceAction={advanceAction}
+        />
       </section>
 
       <div className="patient-detail-grid">
@@ -1910,12 +1914,10 @@ function PatientDetail({
               <PhaseBadge phase={patient.phase} treatmentRoute={patient.treatmentRoute} />
             </div>
             <div className="diagnosis-highlight">
-              <div className="diagnosis-code-large">{patient.primaryDiagnosisCode}</div>
-              <div>
-                <span>Hlavní diagnóza</span>
-                <strong>{patient.primaryDiagnosisLabel}</strong>
-                <small>{patient.diagnosisCertainty}</small>
-              </div>
+              <strong>{patient.primaryDiagnosisCode}</strong>
+              <span aria-hidden="true">|</span>
+              <h3>{patient.primaryDiagnosisLabel}</h3>
+              <small>{patient.diagnosisCertainty}</small>
             </div>
             <div className="episode-facts">
               <div>
@@ -1931,99 +1933,52 @@ function PatientDetail({
                 <strong>{patient.secondaryDiagnoses.join(", ") || "Bez záznamu"}</strong>
               </div>
             </div>
-            <div className="clinical-data-actions">
-              <button className="button button-secondary" type="button" onClick={() => openStage("Biopsie")}>
-                <Microscope size={16} aria-hidden="true" />
-                Otevřít / upravit biopsii
+            <div className="clinical-status-links" aria-label="Klinická data pacienta">
+              <button type="button" onClick={() => openStage("Biopsie")}>
+                <span className={patient.biopsyResult?.conclusion ? "status-complete" : "status-waiting"}>
+                  {patient.biopsyResult?.conclusion ? <Check size={16} /> : <Clock3 size={16} />}
+                </span>
+                <div>
+                  <strong>Biopsie</strong>
+                  <small>
+                    {patient.biopsyResult?.conclusion && patient.biopsyResult.date
+                      ? `Výsledek ${formatDate(patient.biopsyResult.date)}`
+                      : getBiopsyDisplayStatus(patient)}
+                  </small>
+                </div>
+                <ChevronRight size={17} aria-hidden="true" />
               </button>
-              <button className="button button-secondary" type="button" onClick={() => openStage("Staging")}>
-                <ScanLine size={16} aria-hidden="true" />
-                Otevřít / upravit staging
+              <button type="button" onClick={() => openStage("Staging")}>
+                <span className={
+                  patientStagingDetails.length > 0 && completedStagingCount === patientStagingDetails.length
+                    ? "status-complete"
+                    : "status-active"
+                }>
+                  {patientStagingDetails.length > 0 && completedStagingCount === patientStagingDetails.length
+                    ? <Check size={16} />
+                    : <ScanLine size={16} />}
+                </span>
+                <div>
+                  <strong>Staging</strong>
+                  <small>
+                    {patientStagingDetails.length
+                      ? `${completedStagingCount}/${patientStagingDetails.length} vyšetření dokončeno`
+                      : "Vyšetření nejsou vybrána"}
+                  </small>
+                </div>
+                <ChevronRight size={17} aria-hidden="true" />
+              </button>
+              <button type="button" onClick={() => openStage("MDT")}>
+                <span className={patient.mdtConclusion ? "status-complete" : "status-waiting"}>
+                  {patient.mdtConclusion ? <Check size={16} /> : <UsersRound size={16} />}
+                </span>
+                <div>
+                  <strong>MDT</strong>
+                  <small>{getMdtDisplayStatus(patient)}</small>
+                </div>
+                <ChevronRight size={17} aria-hidden="true" />
               </button>
             </div>
-            {patient.biopsyResult ? (
-              <article className="external-biopsy-result">
-                <div className="external-biopsy-result-header">
-                  <span className="external-biopsy-result-icon">
-                    <Microscope size={18} aria-hidden="true" />
-                  </span>
-                  <div>
-                    <span>
-                      {patient.phase === "Čekání na výsledek biopsie"
-                        ? "Biopsie provedena — čeká se na výsledek"
-                        : patient.biopsyStatus === "Provedena v ÚVN"
-                          ? "Výsledek biopsie z ÚVN"
-                          : "Výsledek externí biopsie"}
-                    </span>
-                    <strong>{patient.biopsyResult.facility}</strong>
-                  </div>
-                  <button
-                    className="result-edit-button"
-                    type="button"
-                    onClick={() => openStage("Biopsie")}
-                  >
-                    <PencilLine size={15} aria-hidden="true" />
-                    Upravit
-                  </button>
-                </div>
-                <p>
-                  {patient.biopsyResult.conclusion ||
-                    "Histologický závěr zatím není k dispozici."}
-                </p>
-                <div className="external-biopsy-result-meta">
-                  <span>
-                    Datum odběru / výkonu:{" "}
-                    <strong>{formatLongDate(patient.biopsyResult.date)}</strong>
-                  </span>
-                  {patient.biopsyResult.reportReference ? (
-                    <span>
-                      Reference nálezu: <strong>{patient.biopsyResult.reportReference}</strong>
-                    </span>
-                  ) : null}
-                </div>
-              </article>
-            ) : null}
-            {patientStagingDetails.length > 0 ? (
-              <article className="staging-examination-result">
-                <div className="staging-examination-result-header">
-                  <span className="staging-examination-result-icon">
-                    <ScanLine size={18} aria-hidden="true" />
-                  </span>
-                  <div>
-                    <span>
-                      {patient.phase === "Čekání na výsledky stagingu"
-                        ? "Čekání na výsledky stagingu"
-                        : "Dokončený staging"}
-                    </span>
-                    <strong>Provedená vyšetření</strong>
-                  </div>
-                  <button
-                    className="result-edit-button"
-                    type="button"
-                    onClick={() => openStage("Staging")}
-                  >
-                    <PencilLine size={15} aria-hidden="true" />
-                    Upravit
-                  </button>
-                </div>
-                <ul className="staging-result-list">
-                  {patientStagingDetails.map((examination) => (
-                    <li key={examination.id}>
-                      <CircleCheck size={16} aria-hidden="true" />
-                      <div>
-                        <strong>{examination.name}</strong>
-                        <span>
-                          {examination.date
-                            ? formatLongDate(examination.date)
-                            : "Bez zadaného termínu"}
-                        </span>
-                      </div>
-                      <p>{examination.result || "Závěr zatím není zadán."}</p>
-                    </li>
-                  ))}
-                </ul>
-              </article>
-            ) : null}
           </section>
 
           <section className="panel timeline-panel">
@@ -2048,23 +2003,20 @@ function PatientDetail({
                 return (
                   <article className="timeline-event" key={event.id}>
                     <div className={`timeline-icon timeline-${event.kind}`}>
-                      <Icon size={18} aria-hidden="true" />
+                      <Icon size={16} aria-hidden="true" />
                     </div>
-                    <div className="timeline-line" />
                     <div className="timeline-date">
                       <strong>{formatDate(event.date)}</strong>
-                      <span>{eventKindLabels[event.kind]}</span>
+                      <span>{event.time || "—"}</span>
                     </div>
                     <div className="timeline-card">
-                      <div className="timeline-card-header">
-                        <h3>{event.title}</h3>
-                        <span className={`event-status status-${event.status.replaceAll(" ", "-").toLowerCase()}`}>
-                          {event.status}
-                        </span>
-                      </div>
+                      <h3>{eventKindLabels[event.kind]} · {event.title}</h3>
                       <p>{event.description}</p>
-                      <span className="timeline-author">Zapsal/a: {event.author}</span>
                     </div>
+                    <span className="timeline-author">{event.author}</span>
+                    <span className={`event-status status-${event.status.replaceAll(" ", "-").toLowerCase()}`}>
+                      {event.status}
+                    </span>
                   </article>
                 );
               })}
@@ -2073,43 +2025,6 @@ function PatientDetail({
         </div>
 
         <aside className="patient-detail-aside">
-          <section className="panel next-action-card">
-            <div className="next-action-icon">
-              <CalendarDays size={21} aria-hidden="true" />
-            </div>
-            <p>Nejbližší krok</p>
-            <h2>{patient.nextStep}</h2>
-            <strong>{formatLongDate(patient.nextStepDate)}</strong>
-            {currentEditableStage ? (
-              <button
-                className="button button-primary full-width next-phase-button"
-                type="button"
-                onClick={() => openStage(currentEditableStage)}
-              >
-                Otevřít {currentEditableStage}
-                <ArrowRight size={16} aria-hidden="true" />
-              </button>
-            ) : advanceAction ? (
-              <button
-                className="button button-primary full-width next-phase-button"
-                type="button"
-                onClick={openAdvancePhase}
-              >
-                {advanceAction.label}
-                <ArrowRight size={16} aria-hidden="true" />
-              </button>
-            ) : (
-              <button
-                className="button button-secondary full-width"
-                type="button"
-                onClick={openNewEvent}
-              >
-                <Plus size={16} aria-hidden="true" />
-                Přidat událost
-              </button>
-            )}
-          </section>
-
           <section className="panel info-card">
             <div className="panel-header compact">
               <h2>Kontrolní body</h2>
@@ -2131,14 +2046,6 @@ function PatientDetail({
                 <Clock3 size={18} aria-hidden="true" />
                 <span>Dokončení aktuální fáze</span>
               </div>
-            </div>
-          </section>
-
-          <section className="panel privacy-card">
-            <LockKeyhole size={20} aria-hidden="true" />
-            <div>
-              <strong>Zápis do registru</strong>
-              <span>Změny se ukládají do datové složky s revizí a auditní událostí.</span>
             </div>
           </section>
         </aside>
