@@ -98,6 +98,32 @@ function isTimelineEvent(value: unknown) {
   );
 }
 
+function isMdtDetails(value: unknown) {
+  if (!isRecord(value)) return false;
+  const stringFields = [
+    "surgeryPerformed",
+    "surgeryDate",
+    "surgeryDiagnosis",
+    "operator",
+    "histologyType",
+    "histologyNumber",
+    "histologyGrade",
+    "recommendedImaging",
+    "imagingIntervalMonths",
+    "imagingDate",
+    "imagingSite",
+    "checkupDate",
+    "oncologist",
+    "nationalOncologyRegistry",
+    "karnofsky",
+    "attendees",
+  ];
+  return (
+    stringFields.every((key) => typeof value[key] === "string") &&
+    ["", "Ano", "Ne"].includes(value.surgeryPerformed as string)
+  );
+}
+
 function isPatient(value: unknown): value is Patient {
   if (!isRecord(value)) return false;
   const requiredStrings = [
@@ -140,6 +166,7 @@ function isPatient(value: unknown): value is Patient {
   if (typeof value.progress !== "number" || typeof value.recurrence !== "boolean") return false;
   if (value.mdtDate !== null && typeof value.mdtDate !== "string") return false;
   if (value.mdtConclusion !== undefined && typeof value.mdtConclusion !== "string") return false;
+  if (value.mdtDetails !== undefined && !isMdtDetails(value.mdtDetails)) return false;
   if (value.treatmentRoute !== null && typeof value.treatmentRoute !== "string") return false;
   if (value.treatmentSite !== null && typeof value.treatmentSite !== "string") return false;
   if (value.biopsyResult !== null) {

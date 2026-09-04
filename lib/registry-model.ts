@@ -30,6 +30,25 @@ export type StagingExamination = {
   result: string;
 };
 
+export type MdtDetails = {
+  surgeryPerformed: "" | "Ano" | "Ne";
+  surgeryDate: string;
+  surgeryDiagnosis: string;
+  operator: string;
+  histologyType: string;
+  histologyNumber: string;
+  histologyGrade: string;
+  recommendedImaging: string;
+  imagingIntervalMonths: string;
+  imagingDate: string;
+  imagingSite: string;
+  checkupDate: string;
+  oncologist: string;
+  nationalOncologyRegistry: string;
+  karnofsky: string;
+  attendees: string;
+};
+
 export type EventKind =
   | "intake"
   | "pathology"
@@ -80,6 +99,7 @@ export type Patient = {
   stagingDetails?: StagingExamination[];
   mdtDate: string | null;
   mdtConclusion?: string;
+  mdtDetails?: MdtDetails;
   treatmentRoute: TreatmentRoute | null;
   treatmentSite: TreatmentSite | null;
   recurrence: boolean;

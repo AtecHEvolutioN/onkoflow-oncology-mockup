@@ -1,10 +1,10 @@
 # OnkoFlow production-readiness gates
 
-OnkoFlow 0.6.0 is an operational folder-backed build. Application-level persistence
+OnkoFlow 0.7.0 is an operational folder-backed build. Application-level persistence
 is implemented, but this repository alone does not constitute hospital approval for
 processing real patient data.
 
-## Implemented in 0.6.0
+## Implemented in 0.7.0
 
 - Explicit selection of the `OnkoFlow\data` directory.
 - Read/write permission must be granted before the application opens.
@@ -14,6 +14,10 @@ processing real patient data.
 - The installed PWA caches only application assets for offline use.
 - Patient records use UUID filenames, schema version 2, numeric revisions and verified
   write/read-back.
+- The patient directory supports diagnosis and MDT-date search, including one-click
+  grouping of all patients assigned to a selected MDT date.
+- MDT records include structured operation, histology, follow-up, oncology, performance,
+  NOR, recommendation and attendance fields.
 - Every update creates a pre-update backup and a separate immutable audit event.
 - The application starts with an empty registry and does not load seeded patients.
 - User identity is not captured or verified; prototype actions use the generic label

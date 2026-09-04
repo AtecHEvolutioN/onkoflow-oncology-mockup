@@ -42,6 +42,7 @@ import {
   CareTask,
   CarePhase,
   EventKind,
+  MdtDetails,
   Patient,
   StagingExamination,
   TimelineEvent,
@@ -304,6 +305,28 @@ function getStagingDisplayStatus(patient: Patient) {
 
 function getMdtDisplayStatus(patient: Patient) {
   return getMdtStatus(patient, todayIso());
+}
+
+function getInitialMdtDetails(patient: Patient): MdtDetails {
+  return {
+    surgeryPerformed: "",
+    surgeryDate: "",
+    surgeryDiagnosis: patient.primaryDiagnosisLabel,
+    operator: "",
+    histologyType: patient.biopsyResult?.conclusion ?? "",
+    histologyNumber: patient.biopsyResult?.reportReference ?? "",
+    histologyGrade: "",
+    recommendedImaging: "",
+    imagingIntervalMonths: "",
+    imagingDate: "",
+    imagingSite: "",
+    checkupDate: "",
+    oncologist: "",
+    nationalOncologyRegistry: "",
+    karnofsky: "",
+    attendees: "",
+    ...patient.mdtDetails,
+  };
 }
 
 function getPatientMajorStageIndex(patient: Patient) {
@@ -1249,28 +1272,47 @@ function PatientsView({
   phaseFilter: PatientPhaseFilter | null;
   clearPhaseFilter: () => void;
 }) {
+  const [mdtDateFilter, setMdtDateFilter] = useState("");
+
   const filteredPatients = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("cs-CZ");
-    return patients.filter((patient) => {
-      if (phaseFilter && !phaseFilter.phases.includes(patient.phase)) return false;
-      if (!normalized) return true;
-      return [
+    return patients
+      .filter((patient) => {
+        if (phaseFilter && !phaseFilter.phases.includes(patient.phase)) return false;
+        if (mdtDateFilter && patient.mdtDate !== mdtDateFilter) return false;
+        if (!normalized) return true;
+        return [
           patient.firstName,
           patient.lastName,
           patient.birthNumber,
+          patient.mdtDate ?? "",
+          patient.mdtDate ? formatDate(patient.mdtDate) : "",
           patient.primaryDiagnosisCode,
           patient.primaryDiagnosisLabel,
           patient.physician,
+          patient.mdtDetails?.operator ?? "",
         ]
           .join(" ")
           .toLocaleLowerCase("cs-CZ")
           .includes(normalized);
-    });
-  }, [patients, phaseFilter, query]);
+      })
+      .sort(
+        (a, b) =>
+          (b.mdtDate ?? "").localeCompare(a.mdtDate ?? "") ||
+          a.lastName.localeCompare(b.lastName, "cs-CZ"),
+      );
+  }, [mdtDateFilter, patients, phaseFilter, query]);
 
   const clearFilters = () => {
     setQuery("");
+    setMdtDateFilter("");
     clearPhaseFilter();
+  };
+
+  const selectMdtDate = (date: string) => {
+    setMdtDateFilter(date);
+    setQuery("");
+    if (date) clearPhaseFilter();
   };
 
   return (
@@ -1278,11 +1320,19 @@ function PatientsView({
       <div className="page-heading heading-with-action">
         <div>
           <p className="eyebrow">Evidence pacientů</p>
-          <h1>{phaseFilter ? phaseFilter.label : "Pacienti"}</h1>
+          <h1>
+            {mdtDateFilter
+              ? `MDT ${formatDate(mdtDateFilter)}`
+              : phaseFilter
+                ? phaseFilter.label
+                : "Pacienti"}
+          </h1>
           <p>
-            {phaseFilter
+            {mdtDateFilter
+              ? `Pacienti projednávaní na MDT dne ${formatLongDate(mdtDateFilter)}.`
+              : phaseFilter
               ? "Pacienti v této aktuální fázi onkologického procesu."
-              : "Aktivní onkologické epizody a jejich aktuální fáze."}
+              : "Seznam pacientů seřazený podle data MDT."}
           </p>
         </div>
         {allowPatientCreation ? (
@@ -1301,7 +1351,7 @@ function PatientsView({
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Hledat podle jména, r. č., diagnózy nebo lékaře…"
+              placeholder="Hledat podle jména, r. č., diagnózy, MKN nebo data MDT…"
             />
             {query && (
               <button type="button" aria-label="Vymazat vyhledávání" onClick={() => setQuery("")}>
@@ -1309,9 +1359,25 @@ function PatientsView({
               </button>
             )}
           </label>
+          <label className="mdt-date-filter">
+            <CalendarDays size={17} aria-hidden="true" />
+            <span className="sr-only">Filtrovat podle data MDT</span>
+            <input
+              type="date"
+              value={mdtDateFilter}
+              onChange={(event) => selectMdtDate(event.target.value)}
+              aria-label="Filtrovat podle data MDT"
+            />
+          </label>
           {phaseFilter ? (
             <button className="phase-filter-chip" type="button" onClick={clearPhaseFilter}>
               Fáze: {phaseFilter.label}
+              <X size={14} aria-hidden="true" />
+            </button>
+          ) : null}
+          {mdtDateFilter ? (
+            <button className="phase-filter-chip" type="button" onClick={() => setMdtDateFilter("")}>
+              MDT: {formatDate(mdtDateFilter)}
               <X size={14} aria-hidden="true" />
             </button>
           ) : null}
@@ -1326,11 +1392,12 @@ function PatientsView({
               <table className="patient-table">
               <thead>
                 <tr>
-                  <th>Pacient</th>
-                  <th>Hlavní diagnóza</th>
-                  <th>Fáze péče</th>
-                  <th>Odpovědný lékař</th>
-                  <th>Další krok</th>
+                  <th>Jméno pacienta</th>
+                  <th>RČ</th>
+                  <th>MDT</th>
+                  <th>Diagnóza</th>
+                  <th>MKN dg.</th>
+                  <th>Operatér / lékař</th>
                   <th>
                     <span className="sr-only">Akce</span>
                   </th>
@@ -1346,28 +1413,35 @@ function PatientsView({
                           <strong>
                             {patient.firstName} {patient.lastName}
                           </strong>
-                          <span>
-                            {calculateAge(patient.dateOfBirth)} let · r. č. {patient.birthNumber}
-                          </span>
+                          <span>{calculateAge(patient.dateOfBirth)} let</span>
                         </div>
                       </div>
                     </td>
+                    <td className="birth-number-cell">{patient.birthNumber}</td>
+                    <td>
+                      {patient.mdtDate ? (
+                        <button
+                          className="mdt-date-link"
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            selectMdtDate(patient.mdtDate ?? "");
+                          }}
+                          aria-label={`Zobrazit všechny pacienty MDT ${formatLongDate(patient.mdtDate)}`}
+                        >
+                          {formatDate(patient.mdtDate)}
+                        </button>
+                      ) : (
+                        <span className="table-empty-value">—</span>
+                      )}
+                    </td>
                     <td>
                       <div className="diagnosis-cell">
-                        <strong>{patient.primaryDiagnosisCode}</strong>
-                        <span>{patient.primaryDiagnosisLabel}</span>
+                        <strong>{patient.primaryDiagnosisLabel}</strong>
                       </div>
                     </td>
-                    <td>
-                      <PhaseBadge phase={patient.phase} />
-                    </td>
-                    <td>{patient.physician}</td>
-                    <td>
-                      <div className="next-step-table">
-                        <span>{patient.nextStep}</span>
-                        <strong>{formatDate(patient.nextStepDate)}</strong>
-                      </div>
-                    </td>
+                    <td><strong className="mkn-code">{patient.primaryDiagnosisCode}</strong></td>
+                    <td>{patient.mdtDetails?.operator || patient.physician}</td>
                     <td>
                       <button
                         className="icon-button table-open-button"
@@ -1388,37 +1462,57 @@ function PatientsView({
             </div>
             <div className="patient-mobile-list">
               {filteredPatients.map((patient) => (
-                <button
+                <article
                   className="patient-mobile-card"
                   key={patient.id}
-                  type="button"
-                  onClick={() => openPatient(patient.id)}
                 >
-                  <div className="patient-mobile-identity">
-                    <div className="avatar">{patient.initials}</div>
-                    <div>
-                      <strong>
-                        {patient.firstName} {patient.lastName}
-                      </strong>
-                      <span>
-                        {calculateAge(patient.dateOfBirth)} let · r. č. {patient.birthNumber}
-                      </span>
+                  <button
+                    className="patient-mobile-open"
+                    type="button"
+                    onClick={() => openPatient(patient.id)}
+                  >
+                    <div className="patient-mobile-identity">
+                      <div className="avatar">{patient.initials}</div>
+                      <div>
+                        <strong>
+                          {patient.firstName} {patient.lastName}
+                        </strong>
+                        <span>
+                          {calculateAge(patient.dateOfBirth)} let · r. č. {patient.birthNumber}
+                        </span>
+                      </div>
+                      <ChevronRight size={20} aria-hidden="true" />
                     </div>
-                    <ChevronRight size={20} aria-hidden="true" />
-                  </div>
-                  <div className="patient-mobile-diagnosis">
-                    <span>{patient.primaryDiagnosisCode}</span>
-                    <strong>{patient.primaryDiagnosisLabel}</strong>
-                    <PhaseBadge phase={patient.phase} />
-                  </div>
-                  <div className="patient-mobile-next">
-                    <div>
-                      <span>Další krok</span>
-                      <strong>{patient.nextStep}</strong>
+                    <div className="patient-mobile-diagnosis">
+                      <span>{patient.primaryDiagnosisCode}</span>
+                      <strong>{patient.primaryDiagnosisLabel}</strong>
+                      <PhaseBadge phase={patient.phase} />
                     </div>
-                    <time dateTime={patient.nextStepDate}>{formatDate(patient.nextStepDate)}</time>
-                  </div>
-                </button>
+                    <div className="patient-mobile-next">
+                      <div>
+                        <span>Další krok</span>
+                        <strong>{patient.nextStep}</strong>
+                      </div>
+                      <time dateTime={patient.nextStepDate}>{formatDate(patient.nextStepDate)}</time>
+                    </div>
+                  </button>
+                  <button
+                    className="patient-mobile-mdt"
+                    type="button"
+                    disabled={!patient.mdtDate}
+                    onClick={() => {
+                      selectMdtDate(patient.mdtDate ?? "");
+                    }}
+                    aria-label={patient.mdtDate ? `Zobrazit všechny pacienty MDT ${formatLongDate(patient.mdtDate)}` : "MDT není naplánováno"}
+                  >
+                    <span>Datum MDT</span>
+                    {patient.mdtDate ? (
+                      <time dateTime={patient.mdtDate}>{formatDate(patient.mdtDate)}</time>
+                    ) : (
+                      <strong>Nenaplánováno</strong>
+                    )}
+                  </button>
+                </article>
               ))}
             </div>
           </>
@@ -1933,6 +2027,9 @@ function StageDetailModal({
   const [customExamination, setCustomExamination] = useState("");
   const [mdtDate, setMdtDate] = useState(patient.mdtDate ?? "");
   const [mdtConclusion, setMdtConclusion] = useState(patient.mdtConclusion ?? "");
+  const [mdtDetails, setMdtDetails] = useState<MdtDetails>(() =>
+    getInitialMdtDetails(patient),
+  );
   const [treatmentRoute, setTreatmentRoute] = useState<TreatmentRoute | null>(
     patient.treatmentRoute,
   );
@@ -1977,6 +2074,13 @@ function StageDetailModal({
 
   const getExaminationStatus = (examination: StagingExamination) => {
     return getExaminationDisplayStatus(examination, todayIso());
+  };
+
+  const updateMdtDetail = <Field extends keyof MdtDetails>(
+    field: Field,
+    value: MdtDetails[Field],
+  ) => {
+    setMdtDetails((current) => ({ ...current, [field]: value }));
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -2092,6 +2196,23 @@ function StageDetailModal({
         setFormError("Doplňte datum MDT.");
         return;
       }
+      if (
+        mdtDetails.karnofsky.trim() &&
+        (!/^\d{1,3}$/.test(mdtDetails.karnofsky.trim()) ||
+          Number(mdtDetails.karnofsky) < 0 ||
+          Number(mdtDetails.karnofsky) > 100)
+      ) {
+        setFormError("Karnofsky výkon musí být celé číslo od 0 do 100.");
+        return;
+      }
+      if (
+        mdtDetails.imagingIntervalMonths.trim() &&
+        (!/^\d+$/.test(mdtDetails.imagingIntervalMonths.trim()) ||
+          Number(mdtDetails.imagingIntervalMonths) > 120)
+      ) {
+        setFormError("Interval zobrazení zadejte jako počet měsíců od 0 do 120.");
+        return;
+      }
       if (mdtConclusion.trim() && !treatmentRoute) {
         setFormError("Po zadání závěru vyberte léčebnou strategii.");
         return;
@@ -2110,6 +2231,21 @@ function StageDetailModal({
         ...patient,
         mdtDate,
         mdtConclusion: mdtConclusion.trim(),
+        mdtDetails: {
+          ...mdtDetails,
+          surgeryDiagnosis: mdtDetails.surgeryDiagnosis.trim(),
+          operator: mdtDetails.operator.trim(),
+          histologyType: mdtDetails.histologyType.trim(),
+          histologyNumber: mdtDetails.histologyNumber.trim(),
+          histologyGrade: mdtDetails.histologyGrade.trim(),
+          recommendedImaging: mdtDetails.recommendedImaging.trim(),
+          imagingIntervalMonths: mdtDetails.imagingIntervalMonths.trim(),
+          imagingSite: mdtDetails.imagingSite.trim(),
+          oncologist: mdtDetails.oncologist.trim(),
+          nationalOncologyRegistry: mdtDetails.nationalOncologyRegistry.trim(),
+          karnofsky: mdtDetails.karnofsky.trim(),
+          attendees: mdtDetails.attendees.trim(),
+        },
         treatmentRoute: effectiveRoute,
         phase: mayAdvance && effectiveRoute ? effectiveRoute : patient.phase,
         progress: mayAdvance ? Math.max(patient.progress, 80) : patient.progress,
@@ -2209,11 +2345,70 @@ function StageDetailModal({
             ) : null}
 
             {stage === "MDT" ? (
-              <div className="form-section stage-form-section">
-                <div className="stage-live-status"><strong>{getMdtDisplayStatus({ ...patient, mdtDate, mdtConclusion })}</strong></div>
-                <label className="form-field"><span>Plánované datum MDT *</span><input type="date" value={mdtDate} onChange={(event) => setMdtDate(event.target.value)} /></label>
-                <label className="form-field"><span>Závěr MDT</span><textarea rows={5} value={mdtConclusion} onChange={(event) => setMdtConclusion(event.target.value)} placeholder="Závěr lze doplnit po jednání MDT…" /></label>
-                <fieldset className="route-choice"><legend>Léčebná strategie</legend><div className="route-choice-grid">{treatmentRoutes.map((route) => <label className={`route-choice-option ${treatmentRoute === route.phase ? "selected" : ""}`} key={route.code}><input type="radio" name="stage-route" checked={treatmentRoute === route.phase} onChange={() => setTreatmentRoute(route.phase)} disabled={getPatientMajorStageIndex(patient) > 3} /><span className="route-code">{route.code}</span><span className="route-choice-copy"><strong>{route.phase}</strong><small>{route.sites}</small>{route.next ? <em>{route.next}</em> : null}</span></label>)}</div></fieldset>
+              <div className="form-section stage-form-section mdt-form">
+                <div className="stage-live-status">
+                  <strong>{getMdtDisplayStatus({ ...patient, mdtDate, mdtConclusion })}</strong>
+                </div>
+
+                <section className="mdt-form-block">
+                  <div className="mdt-form-heading">
+                    <strong>Osobní údaje</strong>
+                  </div>
+                  <div className="mdt-patient-summary">
+                    <div><span>Jméno</span><strong>{patient.firstName} {patient.lastName}</strong></div>
+                    <div><span>Rodné číslo</span><strong>{patient.birthNumber}</strong></div>
+                    <div><span>Věk</span><strong>{calculateAge(patient.dateOfBirth)} let</strong></div>
+                    <div><span>MKN diagnóza</span><strong>{patient.primaryDiagnosisCode}</strong></div>
+                    <div className="wide"><span>Diagnóza</span><strong>{patient.primaryDiagnosisLabel}</strong></div>
+                    <label className="form-field"><span>Datum MDT *</span><input type="date" value={mdtDate} onChange={(event) => setMdtDate(event.target.value)} /></label>
+                  </div>
+                </section>
+
+                <section className="mdt-form-block">
+                  <div className="mdt-form-heading">
+                    <strong>Operace</strong>
+                  </div>
+                  <div className="form-grid two-columns">
+                    <label className="form-field"><span>Operace provedena</span><select value={mdtDetails.surgeryPerformed} onChange={(event) => updateMdtDetail("surgeryPerformed", event.target.value as MdtDetails["surgeryPerformed"])}><option value="">Nevybráno</option><option value="Ano">Ano</option><option value="Ne">Ne</option></select></label>
+                    <label className="form-field"><span>Datum operace</span><input type="date" value={mdtDetails.surgeryDate} onChange={(event) => updateMdtDetail("surgeryDate", event.target.value)} /></label>
+                    <label className="form-field"><span>Operační diagnóza</span><input value={mdtDetails.surgeryDiagnosis} onChange={(event) => updateMdtDetail("surgeryDiagnosis", event.target.value)} /></label>
+                    <label className="form-field"><span>Operatér</span><input value={mdtDetails.operator} onChange={(event) => updateMdtDetail("operator", event.target.value)} placeholder="MUDr. …" /></label>
+                  </div>
+                </section>
+
+                <section className="mdt-form-block">
+                  <div className="mdt-form-heading">
+                    <strong>Histologie</strong>
+                  </div>
+                  <div className="form-grid mdt-histology-grid">
+                    <label className="form-field"><span>Histologický typ</span><input value={mdtDetails.histologyType} onChange={(event) => updateMdtDetail("histologyType", event.target.value)} /></label>
+                    <label className="form-field"><span>Číslo histologie</span><input value={mdtDetails.histologyNumber} onChange={(event) => updateMdtDetail("histologyNumber", event.target.value)} /></label>
+                    <label className="form-field"><span>Grade</span><input value={mdtDetails.histologyGrade} onChange={(event) => updateMdtDetail("histologyGrade", event.target.value)} placeholder="např. G2" /></label>
+                  </div>
+                </section>
+
+                <section className="mdt-form-block">
+                  <div className="mdt-form-heading">
+                    <strong>Závěr MDT</strong>
+                  </div>
+                  <div className="form-grid two-columns">
+                    <label className="form-field"><span>Doporučené zobrazení / vyšetření</span><input value={mdtDetails.recommendedImaging} onChange={(event) => updateMdtDetail("recommendedImaging", event.target.value)} placeholder="např. MR, PET/CT" /></label>
+                    <label className="form-field"><span>Za kolik měsíců</span><input inputMode="numeric" value={mdtDetails.imagingIntervalMonths} onChange={(event) => updateMdtDetail("imagingIntervalMonths", event.target.value)} /></label>
+                    <label className="form-field"><span>Termín zobrazení</span><input type="date" value={mdtDetails.imagingDate} onChange={(event) => updateMdtDetail("imagingDate", event.target.value)} /></label>
+                    <label className="form-field"><span>Pracoviště zobrazení</span><input value={mdtDetails.imagingSite} onChange={(event) => updateMdtDetail("imagingSite", event.target.value)} placeholder="např. ÚVN" /></label>
+                    <label className="form-field"><span>Termín kontroly</span><input type="date" value={mdtDetails.checkupDate} onChange={(event) => updateMdtDetail("checkupDate", event.target.value)} /></label>
+                    <label className="form-field"><span>Onkolog</span><input value={mdtDetails.oncologist} onChange={(event) => updateMdtDetail("oncologist", event.target.value)} /></label>
+                    <label className="form-field"><span>NOR</span><input value={mdtDetails.nationalOncologyRegistry} onChange={(event) => updateMdtDetail("nationalOncologyRegistry", event.target.value)} placeholder="Národní onkologický registr" /></label>
+                    <label className="form-field"><span>Karnofsky výkon</span><input inputMode="numeric" value={mdtDetails.karnofsky} onChange={(event) => updateMdtDetail("karnofsky", event.target.value)} placeholder="0–100" /></label>
+                    <label className="form-field full-column"><span>Doporučení / závěr MDT</span><textarea rows={5} value={mdtConclusion} onChange={(event) => setMdtConclusion(event.target.value)} placeholder="Závěr lze doplnit po jednání MDT…" /></label>
+                    <label className="form-field full-column"><span>Přítomní</span><textarea rows={3} value={mdtDetails.attendees} onChange={(event) => updateMdtDetail("attendees", event.target.value)} placeholder="Členové multidisciplinárního týmu…" /></label>
+                  </div>
+                </section>
+
+                <fieldset className="route-choice">
+                  <legend>Léčebná strategie</legend>
+                  <div className="route-choice-grid">{treatmentRoutes.map((route) => <label className={`route-choice-option ${treatmentRoute === route.phase ? "selected" : ""}`} key={route.code}><input type="radio" name="stage-route" checked={treatmentRoute === route.phase} onChange={() => setTreatmentRoute(route.phase)} disabled={getPatientMajorStageIndex(patient) > 3} /><span className="route-code">{route.code}</span><span className="route-choice-copy"><strong>{route.phase}</strong><small>{route.sites}</small>{route.next ? <em>{route.next}</em> : null}</span></label>)}</div>
+                </fieldset>
               </div>
             ) : null}
 

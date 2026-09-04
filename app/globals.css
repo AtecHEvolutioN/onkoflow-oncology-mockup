@@ -3852,6 +3852,18 @@ p {
     font-size: 16px;
   }
 
+  .mdt-date-filter {
+    width: 100%;
+    height: 48px;
+    border-radius: 11px;
+    background: white;
+  }
+
+  .mdt-date-filter input {
+    width: 100%;
+    font-size: 16px;
+  }
+
   .directory-count {
     padding-left: 2px;
     font-size: 11px;
@@ -3875,6 +3887,17 @@ p {
     border: 1px solid var(--line);
     border-radius: 12px;
     background: white;
+    text-align: left;
+  }
+
+  .patient-mobile-open {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    flex-direction: column;
+    padding: 0;
+    color: inherit;
+    background: transparent;
     text-align: left;
   }
 
@@ -5739,6 +5762,92 @@ html[data-onkoflow-offline-ready="true"] body::after {
   background: #d9efeb;
 }
 
+.mdt-date-filter {
+  display: flex;
+  min-width: 178px;
+  height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--muted);
+  background: var(--surface-soft);
+}
+
+.mdt-date-filter:focus-within {
+  border-color: #8fb6d9;
+  background: white;
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.08);
+}
+
+.mdt-date-filter input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--ink);
+  background: transparent;
+  font-size: 11px;
+}
+
+.mdt-date-link {
+  padding: 2px 0;
+  border-bottom: 1px solid currentColor;
+  color: var(--teal-dark);
+  background: transparent;
+  font: inherit;
+  font-weight: 720;
+}
+
+.mdt-date-link:hover {
+  color: var(--teal);
+}
+
+.birth-number-cell,
+.mkn-code {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.table-empty-value {
+  color: var(--muted);
+}
+
+.patient-mobile-mdt {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+
+.patient-mobile-mdt:not(:disabled) {
+  cursor: pointer;
+}
+
+.patient-mobile-mdt:disabled {
+  cursor: default;
+}
+
+.patient-mobile-mdt span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.patient-mobile-mdt time,
+.patient-mobile-mdt strong {
+  color: var(--teal-dark);
+  font-size: 11px;
+  font-weight: 720;
+}
+
 @media (max-width: 720px) {
   .login-page {
     padding: 0;
@@ -5906,7 +6015,7 @@ html[data-onkoflow-offline-ready="true"] body::after {
 }
 
 .stage-detail-modal {
-  max-width: 780px;
+  max-width: 980px;
 }
 
 .stage-form-section {
@@ -5981,6 +6090,67 @@ html[data-onkoflow-offline-ready="true"] body::after {
   margin-top: 12px;
 }
 
+.mdt-form {
+  gap: 14px;
+}
+
+.mdt-form-block {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fbfcfd;
+}
+
+.mdt-form-heading {
+  padding: 9px 13px;
+  color: var(--navy-900);
+  background: #eaf3f2;
+  font-size: 11px;
+}
+
+.mdt-form-block > .form-grid,
+.mdt-patient-summary {
+  padding: 14px;
+}
+
+.mdt-patient-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mdt-patient-summary > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: white;
+}
+
+.mdt-patient-summary > div.wide {
+  grid-column: span 2;
+}
+
+.mdt-patient-summary > div span {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+.mdt-patient-summary > div strong {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 10px;
+}
+
+.mdt-histology-grid {
+  grid-template-columns: minmax(0, 2fr) minmax(160px, 0.8fr) minmax(90px, 0.35fr);
+}
+
 @media (max-width: 680px) {
   .staging-detail-card {
     grid-template-columns: 1fr;
@@ -5992,6 +6162,15 @@ html[data-onkoflow-offline-ready="true"] body::after {
 
   .registry-state-actions {
     flex-direction: column;
+  }
+
+  .mdt-patient-summary,
+  .mdt-histology-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mdt-patient-summary > div.wide {
+    grid-column: auto;
   }
 }
 

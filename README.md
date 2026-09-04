@@ -1,6 +1,6 @@
 # OnkoFlow — GYN oncology care registry
 
-Czech-language departmental registry for tracking patients through an oncologic care pathway. Version 0.6.0 provides:
+Czech-language departmental registry for tracking patients through an oncologic care pathway. Version 0.7.0 provides:
 
 - a clinical operations dashboard;
 - an empty registry on first use with searchable patient records;
@@ -14,6 +14,9 @@ Czech-language departmental registry for tracking patients through an oncologic 
 - biopsy-origin recording so a biopsy already completed at ÚVN or externally is not repeated;
 - structured biopsy results from ÚVN or an external facility (date, workplace, report reference, and conclusion);
 - a selectable staging checklist with custom examinations, plus a separate recurrence state;
+- an MDT-oriented patient table searchable by diagnosis and MDT date;
+- one-click grouping of every patient assigned to the same MDT date;
+- a structured MDT record covering operation, histology, follow-up, recommendation and attendees;
 - patient-scoped creation of planned events that also appear in **Úkoly a termíny**.
 
 ## Data storage
@@ -27,6 +30,8 @@ The shared client-side password is not verified user authentication. Deployment 
 real patient data still requires formal hospital approval, access controls on the SMB
 share, tested backup/restore, and security/privacy governance. See
 [production-readiness gates](docs/PRODUCTION-READINESS.md).
+The expanded clinical lifecycle is maintained in the
+[clinical workflow specification](docs/CLINICAL-WORKFLOW.md).
 
 ## Run locally
 
@@ -42,7 +47,7 @@ Open [http://localhost:3000](http://localhost:3000).
 ### Edge PWA mode (no CMD or executable)
 
 For managed workstations that block command files, open the Vercel HTTPS app once
-in Microsoft Edge. Version 0.6.0 registers a versioned service worker, precaches the
+in Microsoft Edge. Version 0.7.0 registers a versioned service worker, precaches the
 complete static interface, and exposes a PWA manifest. After the green
 `Offline režim připraven` indicator appears, install it from Edge via
 **Apps → Install OnkoFlow**. Subsequent launches can use the cached interface without

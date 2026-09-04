@@ -125,7 +125,29 @@ test("increments revisions, creates a backup and rejects a stale update", async 
   const directory = new MemoryDirectoryHandle();
   const patient = createPatient();
   await createPatientRecord(directory, patient, "tester");
-  const updated = { ...patient, nextStep: "Čekání na termín biopsie" };
+  const updated = {
+    ...patient,
+    nextStep: "Čekání na termín biopsie",
+    mdtDate: "2026-09-10",
+    mdtDetails: {
+      surgeryPerformed: "Ano",
+      surgeryDate: "2026-08-25",
+      surgeryDiagnosis: "Karcinom endometria",
+      operator: "MUDr. Test",
+      histologyType: "Endometroidní karcinom",
+      histologyNumber: "H-123/2026",
+      histologyGrade: "G2",
+      recommendedImaging: "CT",
+      imagingIntervalMonths: "6",
+      imagingDate: "2027-03-10",
+      imagingSite: "ÚVN",
+      checkupDate: "2026-10-10",
+      oncologist: "MUDr. Onkolog",
+      nationalOncologyRegistry: "Hlášení připraveno",
+      karnofsky: "90",
+      attendees: "Gynekolog, onkolog, radiolog, patolog",
+    },
+  };
 
   const saved = await updatePatientRecord(directory, updated, 1, "Biopsie aktualizována", "tester");
   assert.equal(saved.record.revision, 2);
@@ -137,6 +159,8 @@ test("increments revisions, creates a backup and rejects a stale update", async 
 
   const loaded = await loadRegistry(directory);
   assert.equal(loaded.revisions[patient.id], 2);
+  assert.equal(loaded.patients[0].mdtDetails.operator, "MUDr. Test");
+  assert.equal(loaded.patients[0].mdtDate, "2026-09-10");
   assert.equal(loaded.auditEvents.length, 2);
   const backups = await directory.getDirectoryHandle("backups");
   assert.equal(backups.entries.has("patient-1-r1.json"), true);
