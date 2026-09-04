@@ -351,6 +351,16 @@ p {
   backdrop-filter: blur(15px);
 }
 
+.topbar-back-button {
+  flex: 0 0 auto;
+  margin-right: 10px;
+}
+
+.topbar-back-button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
 .topbar-location {
   display: flex;
   flex-direction: column;
@@ -867,7 +877,7 @@ p {
 
 .process-tree-flow {
   display: grid;
-  grid-template-columns: repeat(7, minmax(102px, 1fr));
+  grid-template-columns: repeat(5, minmax(112px, 1fr));
   align-items: stretch;
   gap: 26px;
 }
@@ -1756,7 +1766,7 @@ p {
 
 .pathway-steps {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   padding: 5px 22px 7px;
 }
 
@@ -1769,6 +1779,19 @@ p {
   gap: 8px;
   color: #9aabb7;
   text-align: center;
+  background: transparent;
+  cursor: pointer;
+}
+
+.pathway-step:hover strong,
+.pathway-step:focus-visible strong {
+  color: var(--teal);
+}
+
+.pathway-step:focus-visible {
+  border-radius: 8px;
+  outline: 2px solid var(--teal);
+  outline-offset: 4px;
 }
 
 .pathway-step::before,
@@ -3296,7 +3319,7 @@ p {
   }
 
   .pathway-steps {
-    grid-template-columns: repeat(7, minmax(112px, 1fr));
+    grid-template-columns: repeat(5, minmax(112px, 1fr));
     overflow-x: auto;
     padding-bottom: 12px;
   }
@@ -5856,6 +5879,119 @@ html[data-onkoflow-offline-ready="true"] body::after {
   .process-tree-return-copy {
     order: 3;
     justify-self: center;
+  }
+}
+
+.registry-state-card {
+  align-items: center;
+  text-align: center;
+}
+
+.registry-state-card > svg {
+  color: var(--teal);
+}
+
+.registry-state-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.registry-warning {
+  margin-bottom: 14px;
+}
+
+.compact-empty-state {
+  min-height: 150px;
+}
+
+.stage-detail-modal {
+  max-width: 780px;
+}
+
+.stage-form-section {
+  display: grid;
+  gap: 18px;
+}
+
+.stage-live-status {
+  padding: 12px 14px;
+  border: 1px solid #b9ded8;
+  border-radius: 10px;
+  color: var(--teal-dark);
+  background: var(--teal-soft);
+  font-size: 12px;
+}
+
+.biopsy-choice-grid.two-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.staging-detail-list {
+  display: grid;
+  gap: 12px;
+}
+
+.staging-detail-card {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.55fr) minmax(220px, 1fr);
+  gap: 12px 16px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fbfcfd;
+}
+
+.staging-detail-card > div {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.staging-detail-card > div > span {
+  color: var(--teal);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.staging-detail-card > div > button {
+  display: grid;
+  padding: 5px;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+}
+
+.stage-readonly-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 24px;
+}
+
+.stage-readonly-summary > span {
+  color: var(--muted-strong);
+}
+
+.stage-readonly-summary .button {
+  align-self: flex-end;
+  margin-top: 12px;
+}
+
+@media (max-width: 680px) {
+  .staging-detail-card {
+    grid-template-columns: 1fr;
+  }
+
+  .biopsy-choice-grid.two-options {
+    grid-template-columns: 1fr;
+  }
+
+  .registry-state-actions {
+    flex-direction: column;
   }
 }
 

@@ -5,12 +5,12 @@ import "./globals.css";
 export const metadata: Metadata = {
   title:
     process.env.NEXT_PUBLIC_ONKOFLOW_MODE === "department"
-      ? "OnkoFlow | Diagnostika lokálního úložiště"
+      ? "OnkoFlow | Offline GYN onkologický registr"
       : "OnkoFlow | GYN onkologický registr",
   description:
     process.env.NEXT_PUBLIC_ONKOFLOW_MODE === "department"
-      ? "Diagnostická verze lokálního úložiště OnkoFlow bez ukládání klinických dat."
-      : "Interaktivní mockup pro sledování pacientů v průběhu onkologické péče.",
+      ? "Offline provozní verze registru s ukládáním do vybrané datové složky."
+      : "Provozní registr pro sledování pacientů v průběhu onkologické péče.",
   robots: {
     index: false,
     follow: false,

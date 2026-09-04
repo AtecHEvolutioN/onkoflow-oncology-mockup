@@ -195,7 +195,7 @@ export async function runStorageDiagnostics(
     status: options.staticExport ? "passed" : "blocked",
     detail: options.staticExport
       ? `Department static export a JavaScript jsou načteny; protokol ${capability.protocol}`
-      : "Běží demo build; statický departmental export se zde neověřuje.",
+      : "Běží produkční webový build; statický departmental export se zde neověřuje.",
   });
   reporter({
     id: "secure-context",

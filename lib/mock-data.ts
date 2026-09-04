@@ -6,8 +6,7 @@ export type CoreCarePhase =
 
 export type WaitingCarePhase =
   | "Čekání na výsledek biopsie"
-  | "Čekání na výsledky stagingu"
-  | "Čekání na zahájení léčby";
+  | "Čekání na výsledky stagingu";
 
 export type TreatmentRoute =
   | "Primární operace"
@@ -33,6 +32,13 @@ export type BiopsyResult = {
   facility: string;
   reportReference: string;
   conclusion: string;
+};
+
+export type StagingExamination = {
+  id: string;
+  name: string;
+  date: string;
+  result: string;
 };
 
 export type EventKind =
@@ -82,7 +88,9 @@ export type Patient = {
   biopsyStatus: BiopsyStatus;
   biopsyResult: BiopsyResult | null;
   stagingExaminations: string[];
+  stagingDetails?: StagingExamination[];
   mdtDate: string | null;
+  mdtConclusion?: string;
   treatmentRoute: TreatmentRoute | null;
   treatmentSite: TreatmentSite | null;
   recurrence: boolean;
@@ -499,33 +507,15 @@ export const demoAuditEvents = [
 ];
 
 export const corePathwaySteps: Array<{
-  phase: CoreCarePhase | WaitingCarePhase;
+  phase: CoreCarePhase | "Terapie";
   number: string;
   detail: string;
-  kind: "phase" | "waiting";
 }> = [
-  { phase: "Příjem", number: "1", detail: "RČ · diagnóza · datum", kind: "phase" },
-  { phase: "Biopsie", number: "2", detail: "ÚVN / externí", kind: "phase" },
-  {
-    phase: "Čekání na výsledek biopsie",
-    number: "2a",
-    detail: "histologický nález",
-    kind: "waiting",
-  },
-  { phase: "Staging", number: "3", detail: "CT · MRI · PET/CT · TM", kind: "phase" },
-  {
-    phase: "Čekání na výsledky stagingu",
-    number: "3a",
-    detail: "kompletace nálezů",
-    kind: "waiting",
-  },
-  { phase: "MDT", number: "4", detail: "multidisciplinární tým", kind: "phase" },
-  {
-    phase: "Čekání na zahájení léčby",
-    number: "4a",
-    detail: "termín podle rozhodnutí MDT",
-    kind: "waiting",
-  },
+  { phase: "Příjem", number: "1", detail: "RČ · diagnóza · datum" },
+  { phase: "Biopsie", number: "2", detail: "termín · výsledek" },
+  { phase: "Staging", number: "3", detail: "vyšetření · výsledky" },
+  { phase: "MDT", number: "4", detail: "termín · závěr" },
+  { phase: "Terapie", number: "5", detail: "léčebná větev" },
 ];
 
 export const treatmentRoutes: Array<{
@@ -560,43 +550,22 @@ export const processSummarySteps: Array<{
   description?: string;
   phases: CarePhase[];
   tone: 1 | 2 | 3 | 4 | 5 | 6;
-  kind: "phase" | "waiting";
+  kind: "phase";
 }> = [
   { number: "1", label: "Příjem", phases: ["Příjem"], tone: 1, kind: "phase" },
-  { number: "2", label: "Biopsie", phases: ["Biopsie"], tone: 2, kind: "phase" },
-  {
-    number: "2a",
-    label: "Čekání na výsledek biopsie",
-    phases: ["Čekání na výsledek biopsie"],
-    tone: 2,
-    kind: "waiting",
-  },
+  { number: "2", label: "Biopsie", phases: ["Biopsie", "Čekání na výsledek biopsie"], tone: 2, kind: "phase" },
   { number: "3", label: "Staging", phases: ["Staging"], tone: 3, kind: "phase" },
-  {
-    number: "3a",
-    label: "Čekání na výsledky stagingu",
-    phases: ["Čekání na výsledky stagingu"],
-    tone: 3,
-    kind: "waiting",
-  },
   {
     number: "4",
     label: "MDT",
     description: "Multidisciplinární tým",
-    phases: ["MDT"],
+    phases: ["MDT", "Čekání na výsledky stagingu"],
     tone: 4,
     kind: "phase",
   },
   {
-    number: "4a",
-    label: "Čekání na zahájení léčby",
-    phases: ["Čekání na zahájení léčby"],
-    tone: 4,
-    kind: "waiting",
-  },
-  {
     number: "5",
-    label: "Léčebná větev",
+    label: "Terapie",
     phases: ["Primární operace", "Neoadjuvantní léčba", "Paliace", "Sledování"],
     tone: 5,
     kind: "phase",

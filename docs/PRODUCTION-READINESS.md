@@ -1,19 +1,21 @@
 # OnkoFlow production-readiness gates
 
-OnkoFlow 0.5.3 is a pilot interface and storage-connectivity proof of concept. It is
-not approved for real patient data. The following gates must all be completed before
-clinical use.
+OnkoFlow 0.6.0 is an operational folder-backed build. Application-level persistence
+is implemented, but this repository alone does not constitute hospital approval for
+processing real patient data.
 
-## Current 0.5.3 safeguards
+## Implemented in 0.6.0
 
 - Explicit selection of the `OnkoFlow\data` directory.
 - Read/write permission must be granted before the application opens.
 - The shared password is compared as a SHA-256 digest and is never stored in the
   selected directory or browser settings.
-- Directory handles, but no patient records, are retained in browser IndexedDB.
+- Only the directory handle is retained in browser IndexedDB.
 - The installed PWA caches only application assets for offline use.
-- Patient filenames are not yet implemented; the current application still uses
-  synthetic in-memory records.
+- Patient records use UUID filenames, schema version 2, numeric revisions and verified
+  write/read-back.
+- Every update creates a pre-update backup and a separate immutable audit event.
+- The application starts with an empty registry and does not load seeded patients.
 - User identity is not captured or verified; prototype actions use the generic label
   `Uživatel oddělení`.
 
@@ -21,7 +23,7 @@ The shared password is only a deterrent against accidental access. Because all
 client-side application code is delivered to the workstation, it cannot provide
 secure authentication by itself.
 
-## Required gates before patient data
+## Required organizational gates
 
 1. **Hospital identity** — authenticate through an IT-managed server using the
    hospital directory/SSO. The server may then supply the verified Windows identity;
@@ -30,21 +32,19 @@ secure authentication by itself.
    coordinators, administrators and read-only users.
 3. **Approved hosting and updates** — use hospital-approved internal HTTPS or an
    approved managed deployment. Pin, sign and test releases before promotion.
-4. **Persistent data layer** — implement UUID-based patient directories, validated
-   schemas, atomic writes, append-only clinical events and explicit schema migration.
-5. **Concurrent access** — implement numeric revisions, optimistic concurrency and a
-   visible conflict-resolution workflow; never silently overwrite another user's work.
-6. **Audit trail** — record verified identity, UTC timestamp, workstation/session,
+4. **Concurrent access** — validate multi-workstation behavior on the real SMB share.
+   Browser file APIs cannot guarantee a server-grade atomic compare-and-swap operation.
+5. **Audit identity** — record verified identity, UTC timestamp, workstation/session,
    action, patient UUID and result. Protect the audit trail from alteration.
-7. **Data protection** — complete DPIA/security review, retention rules, encryption
+6. **Data protection** — complete DPIA/security review, retention rules, encryption
    assessment, access-control review and data-minimization review for rodné číslo.
-8. **Recovery** — implement tested backups, restore drills, integrity checks and
+7. **Recovery** — implement tested backups, restore drills, integrity checks and
    documented recovery time/recovery point objectives.
-9. **Clinical validation** — approve workflow definitions, MKN data source, required
+8. **Clinical validation** — approve workflow definitions, MKN data source, required
    fields, terminology and error handling with named clinical owners.
-10. **Operational validation** — test offline startup, folder loss, revoked permission,
+9. **Operational validation** — test offline startup, folder loss, revoked permission,
     full disk, SMB outage, two-workstation collision, interrupted write and upgrade/
     rollback on managed ÚVN workstations.
 
-The application must remain in synthetic-data mode until all gates have named owners,
-documented evidence and formal approval.
+Clinical rollout requires named owners, documented evidence and formal approval for
+the remaining gates.

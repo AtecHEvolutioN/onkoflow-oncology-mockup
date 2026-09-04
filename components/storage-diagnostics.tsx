@@ -81,7 +81,7 @@ export function StorageDiagnostics() {
         status: isDepartmentMode ? "passed" : "blocked",
         detail: isDepartmentMode
           ? `Department static export je načten; protokol ${detected.protocol}`
-          : "Běží demo build; statický departmental export se zde neověřuje.",
+          : "Běží produkční webový build; statický departmental export se zde neověřuje.",
       });
       updateDiagnostic({
         id: "secure-context",
@@ -219,15 +219,14 @@ export function StorageDiagnostics() {
     <>
       <div className="page-heading storage-page-heading">
         <div>
-          <p className="eyebrow">Lokální departmental verze</p>
+          <p className="eyebrow">Provozní datová složka</p>
           <h1>Diagnostika datového úložiště</h1>
           <p>
-            Proof-of-concept přístupu k adresáři přes File System Access API. Tato verze
-            ještě neukládá pacientské záznamy.
+            Ověření čtení, zápisu, nahrazení souboru, oprávnění a detekce konfliktu revizí.
           </p>
         </div>
-        <span className={`storage-mode-chip ${isDepartmentMode ? "department" : "demo"}`}>
-          {isDepartmentMode ? "DEPARTMENT POC" : "DEMO TEST"}
+        <span className="storage-mode-chip department">
+          {isDepartmentMode ? "OFFLINE PROVOZ" : "PRODUKČNÍ PROVOZ"}
         </span>
       </div>
 

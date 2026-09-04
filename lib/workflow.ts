@@ -5,7 +5,7 @@ import type {
   Patient,
   TimelineEvent,
   TreatmentRoute,
-} from "./mock-data";
+} from "./registry-model";
 
 export type CompletedBiopsyStatus = Exclude<BiopsyStatus, "Nutno provést">;
 
@@ -67,44 +67,11 @@ export function getWorkflowAdvanceAction(patient: Patient): WorkflowAdvanceActio
             description: "Biopsie je již doložena, takže se neopakuje.",
           };
     case "Biopsie":
-      return {
-        label: "Potvrdit provedení biopsie",
-        targetLabel: "Čekání na výsledek biopsie",
-        description: "Zaznamená výkon a ponechá pacienta ve sledování histologického výsledku.",
-      };
     case "Čekání na výsledek biopsie":
-      return {
-        label: "Doplnit histologický výsledek",
-        targetLabel: "Staging",
-        description: "Uzavře čekání na histologii a otevře stagingová vyšetření.",
-      };
     case "Staging":
-      return {
-        label: "Potvrdit stagingová vyšetření",
-        targetLabel: "Čekání na výsledky stagingu",
-        description: "Uloží provedená vyšetření a zahájí čekání na kompletní nálezy.",
-      };
     case "Čekání na výsledky stagingu":
-      return {
-        label: "Potvrdit kompletní výsledky",
-        targetLabel: "MDT",
-        description: "Uzavře čekání na výsledky a připraví případ pro multidisciplinární tým.",
-      };
     case "MDT":
-      return {
-        label: "Vybrat léčebnou větev",
-        targetLabel: "Čekání na zahájení léčby",
-        description:
-          "Uloží rozhodnutí multidisciplinárního týmu a zařadí pacienta k zahájení zvolené léčby.",
-      };
-    case "Čekání na zahájení léčby":
-      return patient.treatmentRoute
-        ? {
-            label: "Potvrdit zahájení léčby",
-            targetLabel: patient.treatmentRoute,
-            description: `Potvrdí skutečné zahájení léčebné větve ${patient.treatmentRoute}.`,
-          }
-        : null;
+      return null;
     case "Neoadjuvantní léčba":
       return {
         label: "Předat k operační léčbě",
@@ -167,7 +134,7 @@ function getWorkflowTransitionPlan(
         return null;
       }
       return {
-        nextPhase: "Čekání na výsledek biopsie",
+        nextPhase: input.biopsyResult.conclusion.trim() ? "Staging" : "Biopsie",
         progress: 30,
         nextStep: "Doplnit histologický výsledek",
         nextStepDelayDays: 7,
@@ -224,7 +191,7 @@ function getWorkflowTransitionPlan(
       );
       if (examinations.length === 0) return null;
       return {
-        nextPhase: "Čekání na výsledky stagingu",
+        nextPhase: "Staging",
         progress: 52,
         nextStep: "Zkontrolovat výsledky stagingu",
         nextStepDelayDays: 7,
@@ -274,7 +241,7 @@ function getWorkflowTransitionPlan(
       };
       const details = routeDetails[input.treatmentRoute];
       return {
-        nextPhase: "Čekání na zahájení léčby",
+        nextPhase: input.treatmentRoute,
         progress: 75,
         nextStep: details.nextStep,
         nextStepDelayDays: details.nextStepDelayDays,
@@ -286,45 +253,6 @@ function getWorkflowTransitionPlan(
           treatmentRoute: input.treatmentRoute,
           treatmentSite: null,
         },
-      };
-    }
-    case "Čekání na zahájení léčby": {
-      if (!patient.treatmentRoute) return null;
-      const treatmentStart: Record<
-        TreatmentRoute,
-        Pick<
-          WorkflowTransitionPlan,
-          "nextStep" | "nextStepDelayDays" | "eventKind" | "eventDescription"
-        >
-      > = {
-        "Primární operace": {
-          nextStep: "Dokončit operační léčbu",
-          nextStepDelayDays: 14,
-          eventKind: "surgery",
-          eventDescription: "Byla zahájena větev primární operační léčby.",
-        },
-        "Neoadjuvantní léčba": {
-          nextStep: "Dokončit neoadjuvantní léčbu",
-          nextStepDelayDays: 42,
-          eventKind: "systemic",
-          eventDescription: "Byla zahájena neoadjuvantní léčba.",
-        },
-        Paliace: {
-          nextStep: "Pokračovat v paliativním plánu",
-          nextStepDelayDays: 30,
-          eventKind: "followup",
-          eventDescription: "Byl zahájen individuální plán paliativní péče.",
-        },
-      };
-      const details = treatmentStart[patient.treatmentRoute];
-      return {
-        nextPhase: patient.treatmentRoute,
-        progress: 80,
-        nextStep: details.nextStep,
-        nextStepDelayDays: details.nextStepDelayDays,
-        eventKind: details.eventKind,
-        eventTitle: `Léčba zahájena — ${patient.treatmentRoute}`,
-        eventDescription: details.eventDescription,
       };
     }
     case "Neoadjuvantní léčba":

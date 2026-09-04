@@ -1,8 +1,8 @@
-# OnkoFlow: offline departmental proof-of-concept
+# OnkoFlow: offline departmental application
 
-Tento postup instaluje pouze **diagnostickou verzi** OnkoFlow. Pacientská část nadále
-pracuje se smyšlenými daty v paměti a klinická data se do sdílené složky zatím
-neukládají.
+Tento postup instaluje offline verzi OnkoFlow 0.6.0. Pacientské záznamy se ukládají
+přímo do uživatelem vybrané složky `data`; aplikace při prvním spuštění vytvoří
+podsložky `patients`, `audit` a `backups`.
 
 Offline balíček spustí statickou aplikaci na důvěryhodné lokální adrese
 `http://127.0.0.1:8787`. Nepotřebuje internet, Git, instalaci Node.js ani PowerShell.
@@ -12,10 +12,9 @@ diagnostiku variantu PWA níže. Zákaz správce neobcházejte.
 
 ## Bezpečnostní hranice
 
-- GitHub a Vercel obsahují pouze zdrojový kód a syntetická data.
-- Skutečná pacientská data se nesmějí zadávat do demo ani diagnostického buildu.
-- Diagnostika ukládá do IndexedDB pouze browserový `FileSystemDirectoryHandle`.
-- Diagnostika nikdy neukládá klinický obsah do IndexedDB.
+- GitHub a Vercel obsahují pouze zdrojový kód, nikoli obsah vybrané datové složky.
+- Do IndexedDB se ukládá pouze browserový `FileSystemDirectoryHandle`.
+- Klinický obsah se ukládá jen do vybrané složky `data`.
 - Aplikace a `data` jsou oddělené. Aktualizace aplikace se nesmí dotknout `data`.
 - Lokální server poslouchá pouze na `127.0.0.1` a zpřístupňuje jen soubory v `app`.
 - Úspěšný test na jednom počítači není důkazem bezpečné víceuživatelské databáze.
@@ -36,13 +35,13 @@ Tato varianta potřebuje internet jen pro první načtení a aktualizaci aplikac
    úplnou diagnostiku.
 
 PWA ukládá do cache pouze rozhraní aplikace. Pacientská data do cache ani na Vercel
-neukládá; File System Access pracuje přímo s uživatelem vybranou složkou. Tato
-varianta je přesto jen POC: kód pochází z veřejného HTTPS originu a service worker se
+neukládá; File System Access pracuje přímo s uživatelem vybranou složkou. Kód však
+pochází z veřejného HTTPS originu a service worker se
 může při připojení aktualizovat. Pro klinické použití je nutné schválení IT, řízení
 aktualizací a bezpečnostní kontrola.
 
 Pokud Edge instalaci PWA nenabídne nebo ji správce zakáže, bez zásahu IT zbývá pouze
-online HTTPS mockup. Produkční řešení pak vyžaduje interní HTTPS hosting nebo
+online HTTPS aplikace. Nemocniční řešení pak vyžaduje interní HTTPS hosting nebo
 správcem schválenou a podepsanou aplikaci.
 
 ## Varianta B: lokální balíček, pokud CMD není blokováno
@@ -55,7 +54,7 @@ Budoucí sdílené úložiště je:
 \\share4.uvn.cz\gyn\OnkoFlow\data
 ```
 
-Pro první test vytvořte prázdnou lokální složku `OnkoFlowTest`. Teprve po jejím
+Pro první test vytvořte prázdnou lokální složku s názvem `data`. Teprve po jejím
 úspěšném otestování použijte samostatnou prázdnou testovací složku na SMB. Živou
 datovou složku ani skutečné záznamy zatím nepoužívejte.
 
@@ -125,7 +124,9 @@ běžící instance pouze otevře existující aplikaci.
 
 ## 4. Zkontrolujte prostředí
 
-Aplikace má začít na kartě **Datové úložiště** a zobrazit **DEPARTMENT POC**.
+Aplikace má začít přihlašovací obrazovkou. Vyberte složku `data`, zadejte přístupové
+heslo a po otevření přejděte na kartu **Datové úložiště**. Má se zobrazit
+**OFFLINE PROVOZ**.
 Zkontrolujte:
 
 - `Protokol = http:`;
@@ -140,7 +141,7 @@ zaznamenejte stav a nepokračujte k pacientskému úložišti.
 ## 5. Připojte prázdnou testovací složku
 
 1. Klikněte na **Připojit datovou složku**.
-2. Vyberte prázdnou lokální složku `OnkoFlowTest`.
+2. Vyberte prázdnou lokální složku `data`.
 3. Pokud aplikace zobrazí **Vyžaduje oprávnění**, klikněte na
    **Povolit přístup** a potvrďte zápis.
 4. Klikněte na **Spustit úplný test**.

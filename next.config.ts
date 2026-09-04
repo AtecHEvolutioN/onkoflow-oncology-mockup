@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
       }
     : {}),
   env: {
-    NEXT_PUBLIC_ONKOFLOW_MODE: isDepartmentBuild ? "department" : "demo",
+    NEXT_PUBLIC_ONKOFLOW_MODE: isDepartmentBuild ? "department" : "production",
     NEXT_PUBLIC_ONKOFLOW_BUILD_COMMIT:
       process.env.ONKOFLOW_BUILD_COMMIT ?? "development",
     NEXT_PUBLIC_ONKOFLOW_BUILD_DATE:

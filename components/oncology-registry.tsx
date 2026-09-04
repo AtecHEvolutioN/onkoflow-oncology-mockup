@@ -11,7 +11,6 @@ import {
   CircleCheck,
   ClipboardList,
   Clock3,
-  Eye,
   FileCheck2,
   FilePlus2,
   FolderOpen,
@@ -19,6 +18,7 @@ import {
   History,
   LayoutDashboard,
   ListChecks,
+  LoaderCircle,
   LockKeyhole,
   LogOut,
   Menu,
@@ -37,29 +37,39 @@ import Image from "next/image";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { StorageDiagnostics } from "@/components/storage-diagnostics";
 import { LoginScreen, type OnkoFlowSession } from "@/components/login-screen";
-import { isDepartmentMode } from "@/lib/build-info";
 import {
   BiopsyStatus,
   CareTask,
   CarePhase,
   EventKind,
   Patient,
+  StagingExamination,
   TimelineEvent,
   TreatmentRoute,
-  demoAuditEvents,
-  demoTasks,
   diagnoses,
-  initialPatients,
   corePathwaySteps,
   processSummarySteps,
   standardStagingExaminations,
   treatmentRoutes,
-} from "@/lib/mock-data";
+} from "@/lib/registry-model";
+import {
+  createPatientRecord,
+  explainRepositoryError,
+  loadRegistry,
+  updatePatientRecord,
+  type RepositoryAuditEvent,
+} from "@/lib/storage/patient-repository";
 import {
   advancePatientThroughWorkflow,
   getWorkflowAdvanceAction,
 } from "@/lib/workflow";
 import type { CompletedBiopsyStatus, WorkflowAdvanceInput } from "@/lib/workflow";
+import {
+  getBiopsyDisplayStatus as getBiopsyStatus,
+  getExaminationDisplayStatus,
+  getMdtDisplayStatus as getMdtStatus,
+  getStagingDisplayStatus as getStagingStatus,
+} from "@/lib/workflow-status";
 
 type View = "dashboard" | "patients" | "patient" | "tasks" | "audit" | "storage";
 
@@ -74,8 +84,24 @@ type BirthNumberResult = {
   error: string;
 };
 
-const demoToday = new Date("2026-09-01T12:00:00");
+type MajorStage = "Příjem" | "Biopsie" | "Staging" | "MDT" | "Terapie";
+
 const SESSION_ACTOR = "Uživatel oddělení";
+
+function todayIso() {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
+}
+
+function addDaysIso(value: string, days: number) {
+  const date = new Date(`${value}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
+}
 
 const navItems: Array<{
   id: Exclude<View, "patient">;
@@ -131,7 +157,7 @@ function formatLongDate(value: string) {
 
 function createNextStepTask(patient: Patient): CareTask {
   return {
-    id: `task-next-${patient.id}-${patient.nextStepDate}-${Date.now()}`,
+    id: `task-next-${patient.id}-${patient.nextStepDate}`,
     patientId: patient.id,
     patient: `${patient.firstName} ${patient.lastName}`,
     title: patient.nextStep,
@@ -157,12 +183,25 @@ function createTaskFromEvent(patient: Patient, event: TimelineEvent): CareTask {
 
 function calculateAge(value: string) {
   const birth = new Date(`${value}T12:00:00`);
-  let age = demoToday.getFullYear() - birth.getFullYear();
-  const monthDifference = demoToday.getMonth() - birth.getMonth();
-  if (monthDifference < 0 || (monthDifference === 0 && demoToday.getDate() < birth.getDate())) {
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDifference = today.getMonth() - birth.getMonth();
+  if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birth.getDate())) {
     age -= 1;
   }
   return age;
+}
+
+function deriveTasks(patients: Patient[]) {
+  return patients.flatMap((patient) => {
+    const eventTasks = patient.events
+      .filter((event) => event.status !== "Dokončeno")
+      .map((event) => createTaskFromEvent(patient, event));
+    const hasMatchingEvent = eventTasks.some(
+      (task) => task.title === patient.nextStep && task.date === patient.nextStepDate,
+    );
+    return hasMatchingEvent ? eventTasks : [createNextStepTask(patient), ...eventTasks];
+  });
 }
 
 function parseBirthNumber(value: string): BirthNumberResult {
@@ -235,7 +274,6 @@ const phaseStyleIndex: Record<CarePhase, number> = {
   Staging: 2,
   "Čekání na výsledky stagingu": 2,
   MDT: 3,
-  "Čekání na zahájení léčby": 3,
   "Primární operace": 4,
   "Neoadjuvantní léčba": 4,
   Paliace: 4,
@@ -256,49 +294,64 @@ function PhaseBadge({ phase }: { phase: CarePhase }) {
   );
 }
 
-function PatientPathway({ patient }: { patient: Patient }) {
-  const currentCoreIndex = corePathwaySteps.findIndex((step) => step.phase === patient.phase);
-  const corePathCompleted = currentCoreIndex === -1;
+function getBiopsyDisplayStatus(patient: Patient) {
+  return getBiopsyStatus(patient, todayIso());
+}
+
+function getStagingDisplayStatus(patient: Patient) {
+  return getStagingStatus(patient, todayIso());
+}
+
+function getMdtDisplayStatus(patient: Patient) {
+  return getMdtStatus(patient, todayIso());
+}
+
+function getPatientMajorStageIndex(patient: Patient) {
+  if (patient.phase === "Příjem") return 0;
+  if (patient.phase === "Biopsie" || patient.phase === "Čekání na výsledek biopsie") return 1;
+  if (patient.phase === "Staging" || patient.phase === "Čekání na výsledky stagingu") return 2;
+  if (patient.phase === "MDT") return 3;
+  return 4;
+}
+
+function PatientPathway({
+  patient,
+  onSelectStage,
+}: {
+  patient: Patient;
+  onSelectStage: (stage: MajorStage) => void;
+}) {
+  const currentCoreIndex = getPatientMajorStageIndex(patient);
 
   return (
     <div className="clinical-pathway">
       <div className="pathway-steps">
         {corePathwaySteps.map((step, index) => {
-          const completed = corePathCompleted || index < currentCoreIndex;
+          const completed = index < currentCoreIndex;
           const active = index === currentCoreIndex;
           let detail = step.detail;
 
           if (step.phase === "Příjem") detail = formatDate(patient.intakeDate);
-          if (step.phase === "Biopsie") detail = patient.biopsyStatus;
-          if (step.phase === "Čekání na výsledek biopsie") {
-            detail = patient.biopsyResult?.facility || "Histologický nález se zpracovává";
-          }
-          if (step.phase === "Staging" && patient.stagingExaminations.length > 0) {
-            detail = patient.stagingExaminations.join(" · ");
-          }
-          if (step.phase === "Čekání na výsledky stagingu") {
-            detail = patient.stagingExaminations.join(" · ") || "Kompletace nálezů";
-          }
-          if (step.phase === "MDT") {
-            detail = patient.mdtDate ? formatDate(patient.mdtDate) : "Datum zatím neurčeno";
-          }
-          if (step.phase === "Čekání na zahájení léčby") {
-            detail = patient.treatmentRoute ?? "Léčebná větev zatím neurčena";
-          }
+          if (step.phase === "Biopsie") detail = getBiopsyDisplayStatus(patient);
+          if (step.phase === "Staging") detail = getStagingDisplayStatus(patient);
+          if (step.phase === "MDT") detail = getMdtDisplayStatus(patient);
+          if (step.phase === "Terapie") detail = patient.treatmentRoute ?? "Větev zatím neurčena";
 
           return (
-            <div
-              className={`pathway-step ${step.kind === "waiting" ? "waiting" : ""} ${
-                completed ? "completed" : ""
-              } ${active ? "current" : ""}`}
+            <button
+              type="button"
+              className={`pathway-step ${completed ? "completed" : ""} ${
+                active ? "current" : ""
+              }`}
               key={step.phase}
+              onClick={() => onSelectStage(step.phase)}
             >
               <div className="pathway-node">
                 {completed ? <Check size={15} aria-hidden="true" /> : step.number}
               </div>
               <strong>{step.phase}</strong>
               <span>{detail}</span>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -382,17 +435,25 @@ function EmptyState({
 
 export function OncologyRegistry() {
   const [session, setSession] = useState<OnkoFlowSession | null>(null);
-  const [patients, setPatients] = useState<Patient[]>(initialPatients);
-  const [tasks, setTasks] = useState<CareTask[]>(demoTasks);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [revisions, setRevisions] = useState<Record<string, number>>({});
+  const [auditEvents, setAuditEvents] = useState<RepositoryAuditEvent[]>([]);
+  const [registryState, setRegistryState] = useState<"idle" | "loading" | "ready" | "saving" | "error">("idle");
+  const [registryMessage, setRegistryMessage] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
   const [activeView, setActiveView] = useState<View>("dashboard");
-  const [selectedPatientId, setSelectedPatientId] = useState(initialPatients[0].id);
+  const [selectedPatientId, setSelectedPatientId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [patientPhaseFilter, setPatientPhaseFilter] = useState<PatientPhaseFilter | null>(null);
   const [isNewPatientOpen, setIsNewPatientOpen] = useState(false);
   const [isNewEventOpen, setIsNewEventOpen] = useState(false);
   const [isAdvancePhaseOpen, setIsAdvancePhaseOpen] = useState(false);
+  const [selectedStage, setSelectedStage] = useState<MajorStage | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toast, setToast] = useState("");
+  const [viewHistory, setViewHistory] = useState<View[]>([]);
+
+  const tasks = useMemo(() => deriveTasks(patients), [patients]);
 
   const selectedPatient =
     patients.find((patient) => patient.id === selectedPatientId) ?? patients[0];
@@ -407,7 +468,41 @@ export function OncologyRegistry() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  useEffect(() => {
+    if (!session) return;
+
+    let active = true;
+    void loadRegistry(session.directory)
+      .then((loaded) => {
+        if (!active) return;
+        setPatients(loaded.patients);
+        setRevisions(loaded.revisions);
+        setAuditEvents(loaded.auditEvents);
+        setSelectedPatientId((current) =>
+          loaded.patients.some((patient) => patient.id === current)
+            ? current
+            : (loaded.patients[0]?.id ?? ""),
+        );
+        setRegistryMessage(
+          loaded.warnings.length
+            ? `Některé soubory nebylo možné načíst: ${loaded.warnings.join("; ")}`
+            : "",
+        );
+        setRegistryState("ready");
+      })
+      .catch((error) => {
+        if (!active) return;
+        setRegistryMessage(explainRepositoryError(error));
+        setRegistryState("error");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [reloadKey, session]);
+
   const navigate = (view: View) => {
+    if (view !== activeView) setViewHistory((current) => [...current, activeView]);
     setActiveView(view);
     setSidebarOpen(false);
     setSearchQuery("");
@@ -417,64 +512,103 @@ export function OncologyRegistry() {
   const openPatientCategory = (label: string, phases: CarePhase[]) => {
     setPatientPhaseFilter({ label, phases });
     setSearchQuery("");
+    if (activeView !== "patients") setViewHistory((current) => [...current, activeView]);
     setActiveView("patients");
     setSidebarOpen(false);
   };
 
   const openPatient = (id: string) => {
+    if (activeView !== "patient") setViewHistory((current) => [...current, activeView]);
     setSelectedPatientId(id);
     setActiveView("patient");
     setSidebarOpen(false);
   };
 
-  const createPatient = (patient: Patient) => {
-    setPatients((current) => [patient, ...current]);
-    setTasks((current) => [createNextStepTask(patient), ...current]);
-    setSelectedPatientId(patient.id);
-    setActiveView("patient");
-    setIsNewPatientOpen(false);
-    setToast("Pacient byl přidán do demo registru.");
+  const goBack = () => {
+    const previous = viewHistory.at(-1);
+    if (!previous) return;
+    setViewHistory((current) => current.slice(0, -1));
+    setActiveView(previous);
+    setSidebarOpen(false);
   };
 
-  const addEvent = (event: TimelineEvent) => {
-    if (!selectedPatient) return;
-    setPatients((current) =>
-      current.map((patient) =>
-        patient.id === selectedPatientId
-          ? {
-              ...patient,
-              ...(event.kind === "recurrence"
-                ? {
-                    phase: "Recidiva" as const,
-                    recurrence: true,
-                    priority: "Vysoká" as const,
-                    nextStep: "Restaging a nové rozhodnutí MDT",
-                    nextStepDate: event.date,
-                  }
-                : {}),
-              events: [event, ...patient.events],
-            }
-          : patient,
-      ),
-    );
-    setTasks((current) => {
-      const withoutMatchingTask = current.filter(
-        (task) =>
-          !(
-            task.patientId === selectedPatient.id &&
-            task.title === event.title &&
-            task.date === event.date
-          ),
+  const createPatient = async (patient: Patient) => {
+    if (!session) throw new Error("Datová složka není připojena.");
+    setRegistryState("saving");
+    setRegistryMessage("");
+    try {
+      const saved = await createPatientRecord(session.directory, patient, SESSION_ACTOR);
+      setPatients((current) => [saved.record.patient, ...current]);
+      setRevisions((current) => ({ ...current, [patient.id]: saved.record.revision }));
+      setAuditEvents((current) => [saved.auditEvent, ...current]);
+      setSelectedPatientId(patient.id);
+      setViewHistory((current) => [...current, activeView]);
+      setActiveView("patient");
+      setIsNewPatientOpen(false);
+      setToast("Pacient byl bezpečně uložen do registru.");
+    } catch (error) {
+      const message = explainRepositoryError(error);
+      setRegistryMessage(message);
+      throw new Error(message);
+    } finally {
+      setRegistryState("ready");
+    }
+  };
+
+  const savePatientChange = async (updatedPatient: Patient, action: string) => {
+    if (!session) throw new Error("Datová složka není připojena.");
+    const expectedRevision = revisions[updatedPatient.id];
+    if (!expectedRevision) throw new Error("Chybí lokální revize záznamu. Obnovte registr.");
+    setRegistryState("saving");
+    setRegistryMessage("");
+    try {
+      const saved = await updatePatientRecord(
+        session.directory,
+        updatedPatient,
+        expectedRevision,
+        action,
+        SESSION_ACTOR,
       );
-      return event.status === "Dokončeno"
-        ? withoutMatchingTask
-        : [createTaskFromEvent(selectedPatient, event), ...withoutMatchingTask];
-    });
-    setIsNewEventOpen(false);
-    setToast("Nová událost byla přidána do časové osy.");
+      setPatients((current) =>
+        current.map((patient) =>
+          patient.id === updatedPatient.id ? saved.record.patient : patient,
+        ),
+      );
+      setRevisions((current) => ({
+        ...current,
+        [updatedPatient.id]: saved.record.revision,
+      }));
+      setAuditEvents((current) => [saved.auditEvent, ...current]);
+    } catch (error) {
+      const message = explainRepositoryError(error);
+      setRegistryMessage(message);
+      throw new Error(message);
+    } finally {
+      setRegistryState("ready");
+    }
   };
 
-  const advancePatient = (input: WorkflowAdvanceInput) => {
+  const addEvent = async (event: TimelineEvent) => {
+    if (!selectedPatient) return;
+    const updatedPatient: Patient = {
+      ...selectedPatient,
+      ...(event.kind === "recurrence"
+        ? {
+            phase: "Recidiva" as const,
+            recurrence: true,
+            priority: "Vysoká" as const,
+            nextStep: "Restaging a nové rozhodnutí MDT",
+            nextStepDate: event.date,
+          }
+        : {}),
+      events: [event, ...selectedPatient.events],
+    };
+    await savePatientChange(updatedPatient, `Přidána událost: ${event.title}`);
+    setIsNewEventOpen(false);
+    setToast("Nová událost byla uložena do časové osy.");
+  };
+
+  const advancePatient = async (input: WorkflowAdvanceInput) => {
     if (!selectedPatient || !session) return;
     const updatedPatient = advancePatientThroughWorkflow(selectedPatient, input, SESSION_ACTOR);
     if (!updatedPatient) {
@@ -482,23 +616,60 @@ export function OncologyRegistry() {
       return;
     }
 
-    setPatients((current) =>
-      current.map((patient) =>
-        patient.id === selectedPatient.id ? updatedPatient : patient,
-      ),
+    await savePatientChange(
+      updatedPatient,
+      `Posun fáze: ${selectedPatient.phase} → ${updatedPatient.phase}`,
     );
-    setTasks((current) => [
-      createNextStepTask(updatedPatient),
-      ...current.filter(
-        (task) => task.patientId !== selectedPatient.id || task.date > input.date,
-      ),
-    ]);
     setIsAdvancePhaseOpen(false);
     setToast(`Pacient byl posunut do fáze ${updatedPatient.phase}.`);
   };
 
   if (!session) {
-    return <LoginScreen onLogin={setSession} />;
+    return (
+      <LoginScreen
+        onLogin={(nextSession) => {
+          setRegistryState("loading");
+          setRegistryMessage("");
+          setSession(nextSession);
+        }}
+      />
+    );
+  }
+
+  if (registryState === "loading" || registryState === "idle") {
+    return (
+      <main className="login-page">
+        <section className="login-card registry-state-card" aria-live="polite">
+          <LoaderCircle className="spin" size={32} aria-hidden="true" />
+          <h1>Načítám registr</h1>
+          <p>Kontroluji datovou složku a načítám pacientské záznamy.</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (registryState === "error") {
+    return (
+      <main className="login-page">
+        <section className="login-card registry-state-card" role="alert">
+          <AlertTriangle size={32} aria-hidden="true" />
+          <h1>Registr nelze načíst</h1>
+          <p>{registryMessage}</p>
+          <div className="registry-state-actions">
+            <button className="button button-primary" type="button" onClick={() => {
+              setRegistryState("loading");
+              setRegistryMessage("");
+              setReloadKey((value) => value + 1);
+            }}>
+              Zkusit znovu
+            </button>
+            <button className="button button-secondary" type="button" onClick={() => setSession(null)}>
+              Změnit složku
+            </button>
+          </div>
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -557,12 +728,8 @@ export function OncologyRegistry() {
         <div className="security-card">
           <ShieldCheck size={20} aria-hidden="true" />
           <div>
-            <strong>{isDepartmentMode ? "Department POC" : "Demo prostředí"}</strong>
-            <span>
-              {isDepartmentMode
-                ? "Klinické ukládání je vypnuto"
-                : "Bez napojení na databázi"}
-            </span>
+            <strong>Provozní registr</strong>
+            <span>Zápis do datové složky aktivní</span>
           </div>
         </div>
 
@@ -596,17 +763,17 @@ export function OncologyRegistry() {
       )}
 
       <main className="main-content">
-        <div className="demo-banner" role="status">
-          <AlertTriangle size={16} aria-hidden="true" />
-          <span>
-            <strong>{isDepartmentMode ? "Diagnostická verze." : "Demo."}</strong>{" "}
-            {isDepartmentMode
-              ? "Pacientská evidence stále používá pouze smyšlená data a neukládá je na disk."
-              : "Používejte pouze smyšlené údaje — nic se neukládá."}
-          </span>
-        </div>
-
         <header className="topbar">
+          <button
+            className="icon-button topbar-back-button"
+            type="button"
+            aria-label="Zpět"
+            title="Zpět"
+            onClick={goBack}
+            disabled={viewHistory.length === 0}
+          >
+            <ArrowLeft size={20} aria-hidden="true" />
+          </button>
           <button
             className="icon-button menu-button"
             type="button"
@@ -625,25 +792,33 @@ export function OncologyRegistry() {
                 <FolderOpen size={14} aria-hidden="true" />
               </span>
               <div>
-                <strong>Datová složka</strong>
+                <strong>{registryState === "saving" ? "Ukládám…" : "Registr připojen"}</strong>
                 <span>{session.directoryName}</span>
               </div>
             </div>
-            {!isDepartmentMode ? (
-              <button
-                className="button button-primary topbar-new"
-                type="button"
-                aria-label="Přijmout nového pacienta"
-                onClick={() => setIsNewPatientOpen(true)}
-              >
-                <Plus size={18} aria-hidden="true" />
-                <span className="topbar-new-label">Nový pacient</span>
-              </button>
-            ) : null}
+            <button
+              className="button button-primary topbar-new"
+              type="button"
+              aria-label="Přijmout nového pacienta"
+              onClick={() => setIsNewPatientOpen(true)}
+              disabled={registryState === "saving"}
+            >
+              <Plus size={18} aria-hidden="true" />
+              <span className="topbar-new-label">Nový pacient</span>
+            </button>
           </div>
         </header>
 
         <section className="page-content">
+          {registryMessage ? (
+            <div className="storage-alert warning registry-warning" role="alert">
+              <AlertTriangle size={18} aria-hidden="true" />
+              <div>
+                <strong>Upozornění datového úložiště</strong>
+                <span>{registryMessage}</span>
+              </div>
+            </div>
+          ) : null}
           {activeView === "dashboard" && (
             <DashboardView
               patients={patients}
@@ -660,7 +835,7 @@ export function OncologyRegistry() {
               setQuery={setSearchQuery}
               openPatient={openPatient}
               openNewPatient={() => setIsNewPatientOpen(true)}
-              allowPatientCreation={!isDepartmentMode}
+              allowPatientCreation
               phaseFilter={patientPhaseFilter}
               clearPhaseFilter={() => setPatientPhaseFilter(null)}
             />
@@ -668,14 +843,14 @@ export function OncologyRegistry() {
           {activeView === "patient" && selectedPatient && (
             <PatientDetail
               patient={selectedPatient}
-              goBack={() => setActiveView("patients")}
               openNewEvent={() => setIsNewEventOpen(true)}
               openAdvancePhase={() => setIsAdvancePhaseOpen(true)}
+              openStage={setSelectedStage}
             />
           )}
           {activeView === "tasks" && <TasksView tasks={tasks} openPatient={openPatient} />}
           {activeView === "storage" && <StorageDiagnostics />}
-          {activeView === "audit" && <AuditView />}
+          {activeView === "audit" && <AuditView events={auditEvents} patients={patients} />}
         </section>
       </main>
 
@@ -713,7 +888,7 @@ export function OncologyRegistry() {
         })}
       </nav>
 
-      {isNewPatientOpen && !isDepartmentMode && (
+      {isNewPatientOpen && (
         <NewPatientModal
           currentUser={SESSION_ACTOR}
           onClose={() => setIsNewPatientOpen(false)}
@@ -735,6 +910,19 @@ export function OncologyRegistry() {
           patient={selectedPatient}
           onClose={() => setIsAdvancePhaseOpen(false)}
           onAdvance={advancePatient}
+        />
+      )}
+
+      {selectedStage && selectedPatient && (
+        <StageDetailModal
+          patient={selectedPatient}
+          stage={selectedStage}
+          onClose={() => setSelectedStage(null)}
+          onSave={async (updatedPatient, action) => {
+            await savePatientChange(updatedPatient, action);
+            setSelectedStage(null);
+            setToast("Údaje fáze byly uloženy.");
+          }}
         />
       )}
 
@@ -773,12 +961,22 @@ function DashboardView({
     () => [...tasks].sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`)),
     [tasks],
   );
+  const today = todayIso();
+  const todayLabel = new Intl.DateTimeFormat("cs-CZ", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${today}T12:00:00`));
+  const mdtToday = tasks.filter(
+    (task) => task.date === today && task.title.toLocaleLowerCase("cs-CZ").includes("mdt"),
+  ).length;
 
   return (
     <>
       <div className="page-heading heading-with-action">
         <div>
-          <p className="eyebrow">Úterý · 1. září 2026</p>
+          <p className="eyebrow">{todayLabel}</p>
           <h1>Přehled péče</h1>
           <p>Aktuální stav pacientů a nejbližší kroky v onkologickém procesu.</p>
         </div>
@@ -793,7 +991,7 @@ function DashboardView({
           <div>
             <h2>Proces onkologické péče</h2>
             <p>
-              Hlavní fáze a čekací stavy před histologií, MDT a zahájením léčby.
+              Hlavní klinické fáze; termíny a čekání se zobrazují jako stav dané fáze.
             </p>
           </div>
           <span className="panel-meta">Aktualizováno právě teď</span>
@@ -802,7 +1000,7 @@ function DashboardView({
           <div className="process-tree" aria-label="Průchod pacienta onkologickou péčí">
             <div className="process-tree-main">
               <div className="process-tree-flow">
-                {processSummarySteps.slice(0, 7).map((step) => {
+                {processSummarySteps.slice(0, -1).map((step) => {
                   const count = patients.filter((patient) =>
                     step.phases.includes(patient.phase),
                   ).length;
@@ -812,7 +1010,7 @@ function DashboardView({
 
                   return (
                     <button
-                      className={`process-tree-node ${step.kind === "waiting" ? "waiting" : ""}`}
+                      className="process-tree-node"
                       type="button"
                       key={step.number}
                       onClick={() => openPatientCategory(step.label, step.phases)}
@@ -899,8 +1097,7 @@ function DashboardView({
         <div className="process-rule-note">
           <Microscope size={17} aria-hidden="true" />
           <span>
-            Pokud je při příjmu doložena biopsie z externího pracoviště, druhá biopsie se
-            neplánuje a pacient pokračuje do stagingu.
+            Kliknutím na fázi v profilu pacienta otevřete její termíny, výsledky a další postup.
           </span>
         </div>
       </section>
@@ -912,7 +1109,7 @@ function DashboardView({
           </div>
           <span className="metric-label">Aktivní pacienti</span>
           <strong>{patients.length}</strong>
-          <span className="metric-caption">v demo registru</span>
+          <span className="metric-caption">v registru</span>
         </button>
         <button className="metric-card" type="button" onClick={() => navigate("patients")}>
           <div className="metric-icon metric-red">
@@ -927,8 +1124,8 @@ function DashboardView({
             <UsersRound size={21} aria-hidden="true" />
           </div>
           <span className="metric-label">MDT dnes</span>
-          <strong>1</strong>
-          <span className="metric-caption">ve 13:30</span>
+          <strong>{mdtToday}</strong>
+          <span className="metric-caption">naplánované termíny</span>
         </button>
         <button className="metric-card" type="button" onClick={() => navigate("patients")}>
           <div className="metric-icon metric-teal">
@@ -952,7 +1149,7 @@ function DashboardView({
             </button>
           </div>
           <div className="patient-list-compact">
-            {recentPatients.map((patient) => (
+            {recentPatients.length ? recentPatients.map((patient) => (
               <button
                 className="patient-compact-row"
                 key={patient.id}
@@ -978,7 +1175,12 @@ function DashboardView({
                 </div>
                 <ChevronRight className="row-chevron" size={18} aria-hidden="true" />
               </button>
-            ))}
+            )) : (
+              <div className="empty-state compact-empty-state">
+                <h3>Registr zatím neobsahuje žádné pacienty</h3>
+                <p>První záznam vytvoříte tlačítkem Nový pacient.</p>
+              </div>
+            )}
           </div>
         </section>
 
@@ -993,7 +1195,7 @@ function DashboardView({
             </button>
           </div>
           <div className="task-stack">
-            {upcomingTasks.slice(0, 3).map((task) => (
+            {upcomingTasks.length ? upcomingTasks.slice(0, 3).map((task) => (
               <button className="task-card" key={task.id} type="button" onClick={() => openPatient(task.patientId)}>
                 <div className="task-date-block">
                   <strong>{new Date(`${task.date}T12:00:00`).getDate()}</strong>
@@ -1010,7 +1212,12 @@ function DashboardView({
                 </div>
                 <ChevronRight size={17} aria-hidden="true" />
               </button>
-            ))}
+            )) : (
+              <div className="empty-state compact-empty-state">
+                <h3>Žádné naplánované úkoly</h3>
+                <p>Termíny vzniknou při práci se záznamem pacienta.</p>
+              </div>
+            )}
           </div>
           <button className="button button-soft schedule-button" type="button" onClick={() => navigate("tasks")}>
             <ListChecks size={17} aria-hidden="true" />
@@ -1229,24 +1436,27 @@ function PatientsView({
 
 function PatientDetail({
   patient,
-  goBack,
   openNewEvent,
   openAdvancePhase,
+  openStage,
 }: {
   patient: Patient;
-  goBack: () => void;
   openNewEvent: () => void;
   openAdvancePhase: () => void;
+  openStage: (stage: MajorStage) => void;
 }) {
   const advanceAction = getWorkflowAdvanceAction(patient);
+  const currentEditableStage: MajorStage | null =
+    patient.phase === "Biopsie" || patient.phase === "Čekání na výsledek biopsie"
+      ? "Biopsie"
+      : patient.phase === "Staging" || patient.phase === "Čekání na výsledky stagingu"
+        ? "Staging"
+        : patient.phase === "MDT"
+          ? "MDT"
+          : null;
 
   return (
     <>
-      <button className="back-button" type="button" onClick={goBack}>
-        <ArrowLeft size={17} aria-hidden="true" />
-        Zpět na seznam pacientů
-      </button>
-
       <section className="patient-hero panel">
         <div className="patient-hero-main">
           <div className="avatar avatar-large">{patient.initials}</div>
@@ -1255,7 +1465,6 @@ function PatientDetail({
               <h1>
                 {patient.firstName} {patient.lastName}
               </h1>
-              <span className="demo-chip">DEMO</span>
             </div>
             <div className="patient-meta-line">
               <span>r. č. {patient.birthNumber}</span>
@@ -1265,10 +1474,6 @@ function PatientDetail({
           </div>
         </div>
         <div className="patient-hero-actions">
-          <button className="button button-secondary" type="button">
-            <PencilLine size={17} aria-hidden="true" />
-            Upravit údaje
-          </button>
           <button className="button button-primary" type="button" onClick={openNewEvent}>
             <Plus size={18} aria-hidden="true" />
             Přidat událost
@@ -1290,7 +1495,7 @@ function PatientDetail({
             <span className="progress-value">{patient.progress} % procesu</span>
           </div>
         </div>
-        <PatientPathway patient={patient} />
+        <PatientPathway patient={patient} onSelectStage={openStage} />
       </section>
 
       <section className="mobile-next-action panel" aria-label="Nejbližší krok">
@@ -1302,7 +1507,16 @@ function PatientDetail({
           <strong>{patient.nextStep}</strong>
           <time dateTime={patient.nextStepDate}>{formatLongDate(patient.nextStepDate)}</time>
         </div>
-        {advanceAction ? (
+        {currentEditableStage ? (
+          <button
+            className="button button-primary mobile-advance-button"
+            type="button"
+            onClick={() => openStage(currentEditableStage)}
+          >
+            Otevřít {currentEditableStage}
+            <ArrowRight size={17} aria-hidden="true" />
+          </button>
+        ) : advanceAction ? (
           <button
             className="button button-primary mobile-advance-button"
             type="button"
@@ -1461,7 +1675,16 @@ function PatientDetail({
             <p>Nejbližší krok</p>
             <h2>{patient.nextStep}</h2>
             <strong>{formatLongDate(patient.nextStepDate)}</strong>
-            {advanceAction ? (
+            {currentEditableStage ? (
+              <button
+                className="button button-primary full-width next-phase-button"
+                type="button"
+                onClick={() => openStage(currentEditableStage)}
+              >
+                Otevřít {currentEditableStage}
+                <ArrowRight size={16} aria-hidden="true" />
+              </button>
+            ) : advanceAction ? (
               <button
                 className="button button-primary full-width next-phase-button"
                 type="button"
@@ -1509,8 +1732,8 @@ function PatientDetail({
           <section className="panel privacy-card">
             <LockKeyhole size={20} aria-hidden="true" />
             <div>
-              <strong>Koncept zabezpečeného přístupu</strong>
-              <span>Každé zobrazení by v produkci vytvořilo auditní záznam.</span>
+              <strong>Zápis do registru</strong>
+              <span>Změny se ukládají do datové složky s revizí a auditní událostí.</span>
             </div>
           </section>
         </aside>
@@ -1530,9 +1753,11 @@ function TasksView({
     () => [...tasks].sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`)),
     [tasks],
   );
-  const todayCount = tasks.filter((task) => task.date === "2026-09-01").length;
+  const today = todayIso();
+  const endOfWeek = addDaysIso(today, 6);
+  const todayCount = tasks.filter((task) => task.date === today).length;
   const thisWeekCount = tasks.filter(
-    (task) => task.date >= "2026-09-01" && task.date <= "2026-09-07",
+    (task) => task.date >= today && task.date <= endOfWeek,
   ).length;
   const highPriorityCount = tasks.filter((task) => task.priority === "Vysoká").length;
 
@@ -1598,13 +1823,22 @@ function TasksView({
   );
 }
 
-function AuditView() {
+function AuditView({
+  events,
+  patients,
+}: {
+  events: RepositoryAuditEvent[];
+  patients: Patient[];
+}) {
+  const patientNames = new Map(
+    patients.map((patient) => [patient.id, `${patient.firstName} ${patient.lastName}`]),
+  );
   return (
     <>
       <div className="page-heading">
         <p className="eyebrow">Bezpečnost a dohledatelnost</p>
         <h1>Auditní stopa</h1>
-        <p>Ukázka evidence přístupů a změn. V mockupu se nové záznamy neukládají.</p>
+        <p>Neměnný přehled změn uložených v datové složce registru.</p>
       </div>
 
       <section className="panel audit-intro">
@@ -1614,8 +1848,8 @@ function AuditView() {
         <div>
           <h2>Každá práce se záznamem musí být dohledatelná</h2>
           <p>
-            Produkční systém by evidoval uživatele, čas, akci, dotčený záznam, účel přístupu
-            a technický kontext bez ukládání citlivého obsahu do logu.
+            Každé vytvoření záznamu a každá uložená změna vytváří samostatný auditní
+            soubor s časem, akcí, revizí a identifikátorem dotčeného pacienta.
           </p>
         </div>
       </section>
@@ -1624,33 +1858,371 @@ function AuditView() {
         <div className="panel-header">
           <div>
             <h2>Poslední aktivita</h2>
-            <p>Fiktivní data pro prezentaci rozhraní.</p>
+            <p>Nejnovější uložené změny jsou zobrazeny jako první.</p>
           </div>
-          <span className="demo-chip">DEMO LOG</span>
         </div>
         <div className="audit-list">
-          {demoAuditEvents.map((event) => (
+          {events.length ? events.map((event) => {
+            const occurredAt = new Date(event.timestamp);
+            return (
             <div className="audit-row" key={event.id}>
-              <div className={`audit-action-icon ${event.category === "Změna" ? "change" : "read"}`}>
-                {event.category === "Změna" ? <PencilLine size={17} /> : <Eye size={17} />}
+              <div className="audit-action-icon change">
+                <PencilLine size={17} aria-hidden="true" />
               </div>
               <div className="audit-time">
-                <strong>{event.time.split(", ")[1]}</strong>
-                <span>{event.time.split(", ")[0]}</span>
+                <strong>{new Intl.DateTimeFormat("cs-CZ", { timeStyle: "short" }).format(occurredAt)}</strong>
+                <span>{new Intl.DateTimeFormat("cs-CZ", { dateStyle: "medium" }).format(occurredAt)}</span>
               </div>
               <div className="audit-main">
                 <strong>{event.action}</strong>
-                <span>{event.patient}</span>
+                <span>{patientNames.get(event.patientId) ?? `Záznam ${event.patientId}`}</span>
               </div>
               <div className="audit-user">
-                <span>{event.user}</span>
-                <small>{event.category}</small>
+                <span>{event.actor}</span>
+                <small>{event.category} · revize {event.revision}</small>
               </div>
             </div>
-          ))}
+            );
+          }) : (
+            <div className="empty-state compact-empty-state">
+              <h3>Auditní stopa je zatím prázdná</h3>
+              <p>První záznam vznikne při přijetí pacienta do péče.</p>
+            </div>
+          )}
         </div>
       </section>
     </>
+  );
+}
+
+function StageDetailModal({
+  patient,
+  stage,
+  onClose,
+  onSave,
+}: {
+  patient: Patient;
+  stage: MajorStage;
+  onClose: () => void;
+  onSave: (patient: Patient, action: string) => Promise<void>;
+}) {
+  const [biopsyPerformed, setBiopsyPerformed] = useState(
+    patient.biopsyStatus !== "Nutno provést",
+  );
+  const [biopsyOrigin, setBiopsyOrigin] = useState<"Provedena v ÚVN" | "Provedena externě">(
+    patient.biopsyStatus === "Provedena externě" ? "Provedena externě" : "Provedena v ÚVN",
+  );
+  const [biopsyDate, setBiopsyDate] = useState(patient.biopsyResult?.date ?? "");
+  const [biopsyFacility, setBiopsyFacility] = useState(patient.biopsyResult?.facility ?? "");
+  const [biopsyReference, setBiopsyReference] = useState(
+    patient.biopsyResult?.reportReference ?? "",
+  );
+  const [biopsyConclusion, setBiopsyConclusion] = useState(
+    patient.biopsyResult?.conclusion ?? "",
+  );
+  const [stagingDetails, setStagingDetails] = useState<StagingExamination[]>(() =>
+    patient.stagingDetails?.length
+      ? patient.stagingDetails
+      : patient.stagingExaminations.map((name) => ({
+          id: crypto.randomUUID(),
+          name,
+          date: "",
+          result: "",
+        })),
+  );
+  const [customExamination, setCustomExamination] = useState("");
+  const [mdtDate, setMdtDate] = useState(patient.mdtDate ?? "");
+  const [mdtConclusion, setMdtConclusion] = useState(patient.mdtConclusion ?? "");
+  const [treatmentRoute, setTreatmentRoute] = useState<TreatmentRoute | null>(
+    patient.treatmentRoute,
+  );
+  const [formError, setFormError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isSubmitting) onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [isSubmitting, onClose]);
+
+  const toggleStagingExamination = (name: string) => {
+    setStagingDetails((current) =>
+      current.some((item) => item.name === name)
+        ? current.filter((item) => item.name !== name)
+        : [...current, { id: crypto.randomUUID(), name, date: "", result: "" }],
+    );
+  };
+
+  const addCustomExamination = () => {
+    const name = customExamination.trim();
+    if (!name || stagingDetails.some((item) => item.name.toLocaleLowerCase("cs-CZ") === name.toLocaleLowerCase("cs-CZ"))) return;
+    setStagingDetails((current) => [
+      ...current,
+      { id: crypto.randomUUID(), name, date: "", result: "" },
+    ]);
+    setCustomExamination("");
+  };
+
+  const updateStagingExamination = (
+    id: string,
+    field: "date" | "result",
+    value: string,
+  ) => {
+    setStagingDetails((current) =>
+      current.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
+    );
+  };
+
+  const getExaminationStatus = (examination: StagingExamination) => {
+    return getExaminationDisplayStatus(examination, todayIso());
+  };
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    let updatedPatient = patient;
+    const action = `Aktualizována fáze ${stage}`;
+    const eventDate = todayIso();
+
+    if (stage === "Biopsie") {
+      if ((biopsyPerformed || biopsyConclusion.trim()) && !biopsyDate) {
+        setFormError("Doplňte datum biopsie.");
+        return;
+      }
+      if (biopsyConclusion.trim() && !biopsyPerformed) {
+        setFormError("U výsledku biopsie označte, že biopsie již byla provedena.");
+        return;
+      }
+      if (biopsyOrigin === "Provedena externě" && biopsyPerformed && !biopsyFacility.trim()) {
+        setFormError("Doplňte externí pracoviště.");
+        return;
+      }
+      const resultAvailable = Boolean(biopsyConclusion.trim());
+      const biopsyResult = biopsyDate
+        ? {
+            date: biopsyDate,
+            facility:
+              biopsyOrigin === "Provedena v ÚVN" ? "ÚVN Praha" : biopsyFacility.trim(),
+            reportReference: biopsyReference.trim(),
+            conclusion: biopsyConclusion.trim(),
+          }
+        : null;
+      const mayAdvance = getPatientMajorStageIndex(patient) <= 1 && resultAvailable;
+      updatedPatient = {
+        ...patient,
+        biopsyStatus: biopsyPerformed ? biopsyOrigin : "Nutno provést",
+        biopsyResult,
+        diagnosisCertainty: resultAvailable ? "Histologicky potvrzená" : patient.diagnosisCertainty,
+        phase: mayAdvance ? "Staging" : patient.phase,
+        progress: mayAdvance ? Math.max(patient.progress, 40) : patient.progress,
+        nextStep:
+          getPatientMajorStageIndex(patient) > 1
+            ? patient.nextStep
+            : resultAvailable
+              ? "Vybrat stagingová vyšetření"
+              : getBiopsyDisplayStatus({ ...patient, biopsyResult }),
+        nextStepDate:
+          getPatientMajorStageIndex(patient) > 1
+            ? patient.nextStepDate
+            : (biopsyDate || patient.nextStepDate),
+        events: [
+          {
+            id: crypto.randomUUID(),
+            kind: "pathology",
+            date: eventDate,
+            title: resultAvailable ? "Výsledek biopsie doplněn" : "Biopsie aktualizována",
+            description: resultAvailable
+              ? biopsyConclusion.trim()
+              : biopsyDate
+                ? `Termín biopsie: ${formatLongDate(biopsyDate)}.`
+                : "Biopsie zatím nebyla naplánována.",
+            author: SESSION_ACTOR,
+            status: resultAvailable ? "Dokončeno" : "Naplánováno",
+          },
+          ...patient.events,
+        ],
+      };
+    }
+
+    if (stage === "Staging") {
+      if (!stagingDetails.length) {
+        setFormError("Vyberte alespoň jedno stagingové vyšetření.");
+        return;
+      }
+      if (stagingDetails.some((item) => item.result.trim() && !item.date)) {
+        setFormError("Každý zadaný výsledek musí mít datum vyšetření.");
+        return;
+      }
+      const complete = stagingDetails.every((item) => item.date && item.result.trim());
+      const mayAdvance = getPatientMajorStageIndex(patient) <= 2 && complete;
+      updatedPatient = {
+        ...patient,
+        stagingDetails,
+        stagingExaminations: stagingDetails.map((item) => item.name),
+        phase: mayAdvance ? "MDT" : patient.phase,
+        progress: mayAdvance ? Math.max(patient.progress, 65) : patient.progress,
+        nextStep:
+          getPatientMajorStageIndex(patient) > 2
+            ? patient.nextStep
+            : complete
+              ? "Naplánovat MDT"
+              : getStagingDisplayStatus({ ...patient, stagingDetails }),
+        nextStepDate:
+          getPatientMajorStageIndex(patient) > 2
+            ? patient.nextStepDate
+            : (stagingDetails.map((item) => item.date).filter(Boolean).sort()[0] ?? patient.nextStepDate),
+        events: [
+          {
+            id: crypto.randomUUID(),
+            kind: "imaging",
+            date: eventDate,
+            title: complete ? "Výsledky stagingu kompletní" : "Staging aktualizován",
+            description: `${stagingDetails.length} vyšetření, ${stagingDetails.filter((item) => item.result.trim()).length} výsledků dokončeno.`,
+            author: SESSION_ACTOR,
+            status: complete ? "Dokončeno" : "Naplánováno",
+          },
+          ...patient.events,
+        ],
+      };
+    }
+
+    if (stage === "MDT") {
+      if (!mdtDate) {
+        setFormError("Doplňte datum MDT.");
+        return;
+      }
+      if (mdtConclusion.trim() && !treatmentRoute) {
+        setFormError("Po zadání závěru vyberte léčebnou strategii.");
+        return;
+      }
+      const effectiveRoute = getPatientMajorStageIndex(patient) > 3
+        ? patient.treatmentRoute
+        : treatmentRoute;
+      const complete = Boolean(mdtConclusion.trim() && effectiveRoute);
+      const mayAdvance = getPatientMajorStageIndex(patient) <= 3 && complete;
+      const routeNextStep: Record<TreatmentRoute, string> = {
+        "Primární operace": "Naplánovat operační výkon",
+        "Neoadjuvantní léčba": "Zahájit neoadjuvantní léčbu",
+        Paliace: "Zahájit paliativní plán péče",
+      };
+      updatedPatient = {
+        ...patient,
+        mdtDate,
+        mdtConclusion: mdtConclusion.trim(),
+        treatmentRoute: effectiveRoute,
+        phase: mayAdvance && effectiveRoute ? effectiveRoute : patient.phase,
+        progress: mayAdvance ? Math.max(patient.progress, 80) : patient.progress,
+        nextStep:
+          getPatientMajorStageIndex(patient) > 3
+            ? patient.nextStep
+            : complete && effectiveRoute
+              ? routeNextStep[effectiveRoute]
+              : getMdtDisplayStatus({ ...patient, mdtDate, mdtConclusion }),
+        nextStepDate: getPatientMajorStageIndex(patient) > 3 ? patient.nextStepDate : mdtDate,
+        events: [
+          {
+            id: crypto.randomUUID(),
+            kind: "mdt",
+            date: eventDate,
+            title: complete ? `Rozhodnutí MDT — ${effectiveRoute}` : "MDT aktualizováno",
+            description: mdtConclusion.trim() || `Termín MDT: ${formatLongDate(mdtDate)}.`,
+            author: SESSION_ACTOR,
+            status: complete ? "Dokončeno" : "Naplánováno",
+          },
+          ...patient.events,
+        ],
+      };
+    }
+
+    setIsSubmitting(true);
+    setFormError("");
+    try {
+      await onSave(updatedPatient, action);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Změnu se nepodařilo uložit.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const readOnly = stage === "Příjem" || stage === "Terapie";
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={isSubmitting ? undefined : onClose}>
+      <section className="modal stage-detail-modal" role="dialog" aria-modal="true" aria-labelledby="stage-detail-title" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <p className="eyebrow">{patient.firstName} {patient.lastName}</p>
+            <h2 id="stage-detail-title">{stage}</h2>
+          </div>
+          <button className="icon-button" type="button" aria-label="Zavřít" onClick={onClose} disabled={isSubmitting}><X size={20} /></button>
+        </div>
+
+        {readOnly ? (
+          <div className="stage-readonly-summary">
+            {stage === "Příjem" ? (
+              <>
+                <strong>Přijetí {formatLongDate(patient.intakeDate)}</strong>
+                <span>{patient.primaryDiagnosisCode} — {patient.primaryDiagnosisLabel}</span>
+                <span>Odpovědný pracovník: {patient.physician}</span>
+              </>
+            ) : (
+              <>
+                <strong>{patient.treatmentRoute ?? "Léčebná strategie zatím není určena"}</strong>
+                <span>{patient.mdtConclusion || "Závěr MDT zatím není uložen."}</span>
+              </>
+            )}
+            <button className="button button-secondary" type="button" onClick={onClose}>Zavřít</button>
+          </div>
+        ) : (
+          <form onSubmit={submit}>
+            {stage === "Biopsie" ? (
+              <div className="form-section stage-form-section">
+                <div className="stage-live-status"><strong>{getBiopsyDisplayStatus({ ...patient, biopsyResult: biopsyDate ? { date: biopsyDate, facility: biopsyFacility, reportReference: biopsyReference, conclusion: biopsyConclusion } : null })}</strong></div>
+                <fieldset className="biopsy-choice full-column">
+                  <legend>Byla biopsie již provedena?</legend>
+                  <div className="biopsy-choice-grid two-options">
+                    <label className={`biopsy-option ${biopsyPerformed ? "selected" : ""}`}><input type="radio" checked={biopsyPerformed} onChange={() => setBiopsyPerformed(true)} /><span><strong>Ano</strong><small>Doplnit datum a případně výsledek</small></span></label>
+                    <label className={`biopsy-option ${!biopsyPerformed ? "selected" : ""}`}><input type="radio" checked={!biopsyPerformed} onChange={() => { setBiopsyPerformed(false); setBiopsyConclusion(""); }} /><span><strong>Ne</strong><small>Naplánovat termín biopsie</small></span></label>
+                  </div>
+                </fieldset>
+                {biopsyPerformed ? (
+                  <label className="form-field"><span>Původ biopsie</span><select value={biopsyOrigin} onChange={(event) => setBiopsyOrigin(event.target.value as typeof biopsyOrigin)}><option>Provedena v ÚVN</option><option>Provedena externě</option></select></label>
+                ) : null}
+                <div className="form-grid two-columns">
+                  <label className="form-field"><span>{biopsyPerformed ? "Datum provedení" : "Plánované datum"}</span><input type="date" value={biopsyDate} onChange={(event) => setBiopsyDate(event.target.value)} /></label>
+                  {biopsyPerformed && biopsyOrigin === "Provedena externě" ? <label className="form-field"><span>Pracoviště</span><input value={biopsyFacility} onChange={(event) => setBiopsyFacility(event.target.value)} /></label> : null}
+                  <label className="form-field full-column"><span>Reference nálezu</span><input value={biopsyReference} onChange={(event) => setBiopsyReference(event.target.value)} /></label>
+                  <label className="form-field full-column"><span>Výsledek biopsie</span><textarea rows={5} value={biopsyConclusion} onChange={(event) => setBiopsyConclusion(event.target.value)} placeholder="Výsledek lze doplnit i později…" /></label>
+                </div>
+              </div>
+            ) : null}
+
+            {stage === "Staging" ? (
+              <div className="form-section stage-form-section">
+                <div className="stage-live-status"><strong>{getStagingDisplayStatus({ ...patient, stagingDetails })}</strong></div>
+                <fieldset className="staging-checklist"><legend>Požadovaná vyšetření</legend><div className="staging-choice-grid">{standardStagingExaminations.map((name) => <label className={`staging-choice ${stagingDetails.some((item) => item.name === name) ? "selected" : ""}`} key={name}><input type="checkbox" checked={stagingDetails.some((item) => item.name === name)} onChange={() => toggleStagingExamination(name)} /><span>{name}</span></label>)}</div></fieldset>
+                <div className="staging-add-row"><input value={customExamination} onChange={(event) => setCustomExamination(event.target.value)} placeholder="Další stagingové vyšetření…" /><button className="button button-secondary" type="button" onClick={addCustomExamination}><Plus size={16} /> Přidat</button></div>
+                <div className="staging-detail-list">{stagingDetails.map((examination) => <article className="staging-detail-card" key={examination.id}><div><strong>{examination.name}</strong><span>{getExaminationStatus(examination)}</span><button type="button" aria-label={`Odebrat ${examination.name}`} onClick={() => toggleStagingExamination(examination.name)}><X size={15} /></button></div><label className="form-field"><span>Datum vyšetření</span><input type="date" value={examination.date} onChange={(event) => updateStagingExamination(examination.id, "date", event.target.value)} /></label><label className="form-field"><span>Výsledek</span><textarea rows={3} value={examination.result} onChange={(event) => updateStagingExamination(examination.id, "result", event.target.value)} placeholder="Výsledek lze doplnit později…" /></label></article>)}</div>
+              </div>
+            ) : null}
+
+            {stage === "MDT" ? (
+              <div className="form-section stage-form-section">
+                <div className="stage-live-status"><strong>{getMdtDisplayStatus({ ...patient, mdtDate, mdtConclusion })}</strong></div>
+                <label className="form-field"><span>Plánované datum MDT *</span><input type="date" value={mdtDate} onChange={(event) => setMdtDate(event.target.value)} /></label>
+                <label className="form-field"><span>Závěr MDT</span><textarea rows={5} value={mdtConclusion} onChange={(event) => setMdtConclusion(event.target.value)} placeholder="Závěr lze doplnit po jednání MDT…" /></label>
+                <fieldset className="route-choice"><legend>Léčebná strategie</legend><div className="route-choice-grid">{treatmentRoutes.map((route) => <label className={`route-choice-option ${treatmentRoute === route.phase ? "selected" : ""}`} key={route.code}><input type="radio" name="stage-route" checked={treatmentRoute === route.phase} onChange={() => setTreatmentRoute(route.phase)} disabled={getPatientMajorStageIndex(patient) > 3} /><span className="route-code">{route.code}</span><span className="route-choice-copy"><strong>{route.phase}</strong><small>{route.sites}</small>{route.next ? <em>{route.next}</em> : null}</span></label>)}</div></fieldset>
+              </div>
+            ) : null}
+
+            {formError ? <div className="form-error" role="alert"><AlertTriangle size={17} />{formError}</div> : null}
+            <div className="modal-footer"><button className="button button-secondary" type="button" onClick={onClose} disabled={isSubmitting}>Zrušit</button><button className="button button-primary" type="submit" disabled={isSubmitting}>{isSubmitting ? <LoaderCircle className="spin" size={17} /> : <FileCheck2 size={17} />}{isSubmitting ? "Ukládám…" : "Uložit"}</button></div>
+          </form>
+        )}
+      </section>
+    </div>
   );
 }
 
@@ -1661,12 +2233,12 @@ function NewPatientModal({
 }: {
   currentUser: string;
   onClose: () => void;
-  onCreate: (patient: Patient) => void;
+  onCreate: (patient: Patient) => Promise<void>;
 }) {
   const [birthNumber, setBirthNumber] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [intakeDate, setIntakeDate] = useState("2026-09-01");
+  const [intakeDate, setIntakeDate] = useState(todayIso);
   const [primaryDiagnosis, setPrimaryDiagnosis] = useState("C54.1");
   const [certainty, setCertainty] = useState<Patient["diagnosisCertainty"]>("Suspektní");
   const [biopsyStatus, setBiopsyStatus] = useState<BiopsyStatus>("Nutno provést");
@@ -1677,6 +2249,7 @@ function NewPatientModal({
   const [secondaryDiagnoses, setSecondaryDiagnoses] = useState<string[]>([]);
   const [secondarySelection, setSecondarySelection] = useState("");
   const [formError, setFormError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const birthNumberResult = useMemo(() => parseBirthNumber(birthNumber), [birthNumber]);
   const selectedDiagnosis =
@@ -1690,32 +2263,20 @@ function NewPatientModal({
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
 
-  const fillDemo = () => {
-    setBirthNumber("905101/9999");
-    setFirstName("Nová");
-    setLastName("Testovací");
-    setPrimaryDiagnosis("C54.1");
-    setCertainty("Histologicky potvrzená");
-    setBiopsyStatus("Provedena v ÚVN");
-    setBiopsyDate("2026-08-25");
-    setBiopsyFacility("");
-    setBiopsyReference("HIST-DEMO-2026-0001");
-    setBiopsyConclusion(
-      "Endometrioidní adenokarcinom endometria, FIGO grade 2 (demo výsledek).",
-    );
-    setFormError("");
-  };
-
   const addSecondaryDiagnosis = () => {
     if (!secondarySelection || secondaryDiagnoses.includes(secondarySelection)) return;
     setSecondaryDiagnoses((current) => [...current, secondarySelection]);
     setSecondarySelection("");
   };
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!birthNumberResult.date || birthNumberResult.error) {
       setFormError("Zkontrolujte rodné číslo a odvozené datum narození.");
+      return;
+    }
+    if (birthNumberResult.checksumValid === false) {
+      setFormError("Kontrolní součet rodného čísla neodpovídá. Zkontrolujte zadané číslo.");
       return;
     }
     if (!firstName.trim() || !lastName.trim()) {
@@ -1735,8 +2296,7 @@ function NewPatientModal({
       return;
     }
 
-    const timestamp = Date.now();
-    const id = `demo-${timestamp}`;
+    const id = crypto.randomUUID();
     const biopsyResult: Patient["biopsyResult"] = biopsyAlreadyCompleted
       ? {
           date: biopsyDate,
@@ -1746,7 +2306,7 @@ function NewPatientModal({
         }
       : null;
     const intakeEvent: TimelineEvent = {
-      id: `event-${timestamp}-intake`,
+      id: crypto.randomUUID(),
       kind: "intake",
       date: intakeDate,
       title: "Přijetí pacienta do péče",
@@ -1757,7 +2317,7 @@ function NewPatientModal({
     const events: TimelineEvent[] = biopsyAlreadyCompleted
       ? [
           {
-            id: `event-${timestamp}-biopsy`,
+            id: crypto.randomUUID(),
             kind: "pathology",
             date: biopsyResult?.date ?? intakeDate,
             title:
@@ -1793,7 +2353,9 @@ function NewPatientModal({
       biopsyStatus,
       biopsyResult,
       stagingExaminations: [],
+      stagingDetails: [],
       mdtDate: null,
+      mdtConclusion: "",
       treatmentRoute: null,
       treatmentSite: null,
       recurrence: false,
@@ -1801,11 +2363,19 @@ function NewPatientModal({
       progress: biopsyAlreadyCompleted ? 40 : 20,
       physician: currentUser,
       nextStep: biopsyAlreadyCompleted ? "Naplánovat staging" : "Naplánovat biopsii",
-      nextStepDate: "2026-09-08",
+      nextStepDate: addDaysIso(intakeDate, 7),
       priority: "Běžná",
       events,
     };
-    onCreate(patient);
+    setIsSubmitting(true);
+    setFormError("");
+    try {
+      await onCreate(patient);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Záznam se nepodařilo uložit.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -1824,14 +2394,6 @@ function NewPatientModal({
           </div>
           <button className="icon-button" type="button" aria-label="Zavřít" onClick={onClose}>
             <X size={20} />
-          </button>
-        </div>
-
-        <div className="modal-demo-note">
-          <LockKeyhole size={17} aria-hidden="true" />
-          <span>Demo formulář — nevkládejte skutečné identifikační ani zdravotní údaje.</span>
-          <button type="button" onClick={fillDemo}>
-            Vyplnit testovací údaje
           </button>
         </div>
 
@@ -1857,7 +2419,7 @@ function NewPatientModal({
                 {birthNumberResult.error && <small className="field-error">{birthNumberResult.error}</small>}
                 {!birthNumberResult.error && birthNumberResult.checksumValid === false && (
                   <small className="field-warning">
-                    Kontrolní součet neodpovídá — v demo režimu lze pokračovat.
+                    Kontrolní součet neodpovídá. Záznam nebude možné uložit.
                   </small>
                 )}
               </label>
@@ -1909,7 +2471,7 @@ function NewPatientModal({
                     </option>
                   ))}
                 </select>
-                <small>Mockup obsahuje zkrácený výběr onkogynekologických diagnóz.</small>
+                <small>Výběr obsahuje nejčastější onkogynekologické diagnózy.</small>
               </label>
               <div className="form-field full-column">
                 <span>Vedlejší diagnózy</span>
@@ -2061,12 +2623,12 @@ function NewPatientModal({
           )}
 
           <div className="modal-footer">
-            <button className="button button-secondary" type="button" onClick={onClose}>
+            <button className="button button-secondary" type="button" onClick={onClose} disabled={isSubmitting}>
               Zrušit
             </button>
-            <button className="button button-primary" type="submit">
-              <FileCheck2 size={18} aria-hidden="true" />
-              Přijmout do péče
+            <button className="button button-primary" type="submit" disabled={isSubmitting}>
+              {isSubmitting ? <LoaderCircle className="spin" size={18} aria-hidden="true" /> : <FileCheck2 size={18} aria-hidden="true" />}
+              {isSubmitting ? "Ukládám…" : "Přijmout do péče"}
             </button>
           </div>
         </form>
@@ -2082,17 +2644,17 @@ function AdvancePatientModal({
 }: {
   patient: Patient;
   onClose: () => void;
-  onAdvance: (input: WorkflowAdvanceInput) => void;
+  onAdvance: (input: WorkflowAdvanceInput) => Promise<void>;
 }) {
   const action = getWorkflowAdvanceAction(patient);
   const dialogRef = useRef<HTMLElement>(null);
-  const [date, setDate] = useState("2026-09-02");
+  const [date, setDate] = useState(todayIso);
   const [note, setNote] = useState("");
   const [biopsyStatus, setBiopsyStatus] = useState<CompletedBiopsyStatus | null>(() =>
     patient.biopsyStatus === "Nutno provést" ? null : patient.biopsyStatus,
   );
   const [biopsyDate, setBiopsyDate] = useState(
-    patient.biopsyResult?.date ?? "2026-09-02",
+    patient.biopsyResult?.date ?? todayIso(),
   );
   const [biopsyFacility, setBiopsyFacility] = useState(
     patient.biopsyResult?.facility ?? "",
@@ -2114,6 +2676,7 @@ function AdvancePatientModal({
   const [customStagingExamination, setCustomStagingExamination] = useState("");
   const [treatmentRoute, setTreatmentRoute] = useState<TreatmentRoute | null>(null);
   const [formError, setFormError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const previouslyFocused = document.activeElement;
@@ -2166,7 +2729,7 @@ function AdvancePatientModal({
     );
   };
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!date) {
       setFormError("Doplňte datum dokončení aktuální fáze.");
@@ -2198,25 +2761,33 @@ function AdvancePatientModal({
       return;
     }
 
-    onAdvance({
-      date,
-      note,
-      biopsyStatus,
-      biopsyResult:
-        isBiopsyWorkflow && biopsyStatus
-          ? {
-              date: biopsyDate,
-              facility:
-                biopsyStatus === "Provedena v ÚVN"
-                  ? "ÚVN Praha"
-                  : biopsyFacility.trim(),
-              reportReference: biopsyReference.trim(),
-              conclusion: isWaitingForBiopsyResult ? biopsyConclusion.trim() : "",
-            }
-          : null,
-      stagingExaminations: selectedStagingExaminations,
-      treatmentRoute,
-    });
+    setIsSubmitting(true);
+    setFormError("");
+    try {
+      await onAdvance({
+        date,
+        note,
+        biopsyStatus,
+        biopsyResult:
+          isBiopsyWorkflow && biopsyStatus
+            ? {
+                date: biopsyDate,
+                facility:
+                  biopsyStatus === "Provedena v ÚVN"
+                    ? "ÚVN Praha"
+                    : biopsyFacility.trim(),
+                reportReference: biopsyReference.trim(),
+                conclusion: isWaitingForBiopsyResult ? biopsyConclusion.trim() : "",
+              }
+            : null,
+        stagingExaminations: selectedStagingExaminations,
+        treatmentRoute,
+      });
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Změnu se nepodařilo uložit.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -2520,12 +3091,12 @@ function AdvancePatientModal({
           ) : null}
 
           <div className="modal-footer">
-            <button className="button button-secondary" type="button" onClick={onClose}>
+            <button className="button button-secondary" type="button" onClick={onClose} disabled={isSubmitting}>
               Zrušit
             </button>
-            <button className="button button-primary" type="submit">
-              <ArrowRight size={17} aria-hidden="true" />
-              Potvrdit posun
+            <button className="button button-primary" type="submit" disabled={isSubmitting}>
+              {isSubmitting ? <LoaderCircle className="spin" size={17} aria-hidden="true" /> : <ArrowRight size={17} aria-hidden="true" />}
+              {isSubmitting ? "Ukládám…" : "Potvrdit posun"}
             </button>
           </div>
         </form>
@@ -2543,14 +3114,16 @@ function NewEventModal({
   patient: Patient;
   currentUser: string;
   onClose: () => void;
-  onCreate: (event: TimelineEvent) => void;
+  onCreate: (event: TimelineEvent) => Promise<void>;
 }) {
   const [kind, setKind] = useState<EventKind>("imaging");
-  const [date, setDate] = useState("2026-09-01");
+  const [date, setDate] = useState(todayIso);
   const [time, setTime] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TimelineEvent["status"]>("Naplánováno");
+  const [formError, setFormError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -2560,19 +3133,27 @@ function NewEventModal({
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!title.trim()) return;
-    onCreate({
-      id: `event-${Date.now()}`,
-      kind,
-      date,
-      time: time || undefined,
-      title: title.trim(),
-      description: description.trim() || "Bez doplňující poznámky.",
-      author: currentUser,
-      status,
-    });
+    setIsSubmitting(true);
+    setFormError("");
+    try {
+      await onCreate({
+        id: crypto.randomUUID(),
+        kind,
+        date,
+        time: time || undefined,
+        title: title.trim(),
+        description: description.trim() || "Bez doplňující poznámky.",
+        author: currentUser,
+        status,
+      });
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Událost se nepodařilo uložit.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -2632,10 +3213,16 @@ function NewEventModal({
               <span>Naplánovaná událost se zobrazí také v Úkolech a termínech.</span>
             </div>
           </div>
+          {formError ? (
+            <div className="form-error" role="alert">
+              <AlertTriangle size={17} aria-hidden="true" />
+              {formError}
+            </div>
+          ) : null}
           <div className="modal-footer">
-            <button className="button button-secondary" type="button" onClick={onClose}>Zrušit</button>
-            <button className="button button-primary" type="submit">
-              <Plus size={17} aria-hidden="true" /> Přidat událost
+            <button className="button button-secondary" type="button" onClick={onClose} disabled={isSubmitting}>Zrušit</button>
+            <button className="button button-primary" type="submit" disabled={isSubmitting}>
+              {isSubmitting ? <LoaderCircle className="spin" size={17} aria-hidden="true" /> : <Plus size={17} aria-hidden="true" />} {isSubmitting ? "Ukládám…" : "Přidat událost"}
             </button>
           </div>
         </form>
