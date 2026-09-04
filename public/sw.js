@@ -1,4 +1,4 @@
-const CACHE_VERSION = "0.8.1";
+const CACHE_VERSION = "0.8.2";
 const CACHE_NAME = `onkoflow-shell-${CACHE_VERSION}`;
 const CORE_URLS = [
   "/",

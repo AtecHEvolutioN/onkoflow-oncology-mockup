@@ -7707,6 +7707,773 @@ html[data-onkoflow-offline-ready="true"] body::after {
   }
 }
 
+/* Dashboard — clinical command centre */
+
+.dashboard-overview-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dashboard-overview-stack .operational-dashboard-grid {
+  order: 1;
+}
+
+.dashboard-overview-stack .operational-process {
+  order: 2;
+}
+
+.dashboard-overview-stack .dashboard-patient-directory {
+  order: 3;
+}
+
+.operational-metrics {
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.operational-metrics .metric-card {
+  min-height: 74px;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  grid-template-rows: 1fr;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 15px;
+  border-color: #d6dee5;
+  background: white;
+}
+
+.operational-metrics .metric-card:hover {
+  border-color: #adbcc8;
+  transform: none;
+}
+
+.operational-metrics .metric-card.active {
+  border-color: #7062c3;
+  background: #f8f7ff;
+  box-shadow: 0 0 0 3px rgb(112 98 195 / 0.09);
+}
+
+.operational-metrics .metric-icon {
+  width: 36px;
+  height: 36px;
+  grid-row: 1;
+}
+
+.metric-amber {
+  color: #8a6410;
+  background: #fff2cf;
+}
+
+.operational-metrics .metric-label {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.operational-metrics .metric-card > strong {
+  margin: 0;
+  font-size: 27px;
+}
+
+.operational-metrics .metric-caption {
+  display: none;
+}
+
+.operational-dashboard-grid {
+  grid-template-columns: minmax(0, 2.25fr) minmax(300px, 0.9fr);
+  align-items: start;
+  gap: 16px;
+  margin-bottom: 0;
+}
+
+.operational-dashboard-grid .patients-panel,
+.operational-dashboard-grid .schedule-panel {
+  min-height: 0;
+}
+
+.operational-dashboard-grid .panel-header {
+  min-height: 72px;
+  padding: 14px 18px 12px;
+}
+
+.operational-dashboard-grid .panel-header h2 {
+  font-size: 20px;
+}
+
+.queue-total {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  color: #7b5707;
+  background: #fff1c9;
+  font-size: 12px;
+  font-weight: 720;
+  white-space: nowrap;
+}
+
+.action-queue-row {
+  min-height: 76px;
+  grid-template-columns: 10px minmax(150px, 0.72fr) minmax(220px, 1.4fr) auto auto;
+  gap: 14px;
+  padding: 11px 18px;
+}
+
+.action-patient strong,
+.action-description strong {
+  font-size: 14px;
+}
+
+.action-patient span,
+.action-description span {
+  font-size: 12px;
+}
+
+.operational-dashboard-grid .compact-empty-state {
+  min-height: 112px;
+  padding: 24px 18px;
+}
+
+.operational-dashboard-grid .task-stack {
+  padding: 0 13px;
+}
+
+.operational-dashboard-grid .task-card {
+  min-height: 59px;
+  grid-template-columns: 40px 25px minmax(0, 1fr) auto;
+  gap: 9px;
+  padding: 8px 1px;
+}
+
+.operational-dashboard-grid .task-date-block {
+  width: 38px;
+  height: 42px;
+}
+
+.agenda-type-icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 7px;
+  color: #5145a5;
+  background: #efedff;
+}
+
+.operational-dashboard-grid .task-copy {
+  gap: 2px;
+}
+
+.operational-dashboard-grid .task-copy > strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.operational-dashboard-grid .task-copy > span {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.operational-dashboard-grid .task-card:hover .task-copy > strong {
+  color: #5145a5;
+}
+
+.operational-dashboard-grid .schedule-button {
+  min-height: 38px;
+  margin: 8px 13px 13px;
+}
+
+.operational-process {
+  margin: 0;
+}
+
+.operational-process .panel-header {
+  min-height: 66px;
+  padding: 13px 18px 11px;
+}
+
+.operational-process .panel-header h2 {
+  font-size: 18px;
+}
+
+.compact-care-pipeline {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(130px, 1fr));
+  gap: 26px;
+  padding: 14px 18px 12px;
+  overflow-x: auto;
+}
+
+.compact-pipeline-stage {
+  position: relative;
+  display: flex;
+  min-width: 130px;
+  min-height: 85px;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  background: white;
+  text-align: left;
+}
+
+.compact-pipeline-stage:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 39px;
+  right: -27px;
+  width: 26px;
+  height: 2px;
+  background: #cfd8df;
+}
+
+.compact-pipeline-stage:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: 35px;
+  right: -27px;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 6px solid #aebbc5;
+}
+
+.compact-pipeline-stage:hover {
+  border-color: #aebbc5;
+  background: #fafbfc;
+}
+
+.compact-pipeline-heading {
+  display: grid;
+  grid-template-columns: 25px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.pipeline-sequence {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border-radius: 50%;
+  color: #667682;
+  background: #edf1f4;
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.compact-pipeline-heading strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.compact-pipeline-heading b {
+  color: var(--navy-950);
+  font-size: 19px;
+}
+
+.pipeline-distribution {
+  display: block;
+  width: 100%;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf1f3;
+}
+
+.pipeline-distribution i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #9caab4;
+}
+
+.compact-pipeline-stage small {
+  overflow: hidden;
+  color: var(--muted-strong);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-pipeline-stage.pipeline-overdue {
+  border-color: #efb9bf;
+}
+
+.compact-pipeline-stage.pipeline-overdue .pipeline-sequence,
+.compact-pipeline-stage.pipeline-overdue .pipeline-distribution i {
+  color: #a82e3d;
+  background: #d45260;
+}
+
+.compact-pipeline-stage.pipeline-attention {
+  border-color: #ead69e;
+}
+
+.compact-pipeline-stage.pipeline-attention .pipeline-sequence,
+.compact-pipeline-stage.pipeline-attention .pipeline-distribution i {
+  color: #7b5707;
+  background: #dda728;
+}
+
+.compact-pipeline-stage.pipeline-active .pipeline-sequence,
+.compact-pipeline-stage.pipeline-active .pipeline-distribution i {
+  color: #5145a5;
+  background: #7062c3;
+}
+
+.pipeline-secondary-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 0 18px 13px;
+}
+
+.pipeline-therapy-branches {
+  display: flex;
+  min-height: 38px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.pipeline-therapy-branches > span {
+  margin-right: 3px;
+  color: var(--muted-strong);
+  font-weight: 720;
+}
+
+.pipeline-therapy-branches button {
+  display: inline-flex;
+  min-height: 29px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted-strong);
+  background: #fafbfc;
+  font-size: 11px;
+}
+
+.pipeline-therapy-branches button:hover {
+  border-color: #aebbc5;
+  background: white;
+}
+
+.pipeline-therapy-branches b {
+  color: var(--ink);
+}
+
+.pipeline-recurrence {
+  display: grid;
+  min-width: 175px;
+  min-height: 40px;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 9px;
+  border: 1px solid #f0c7cc;
+  border-radius: 8px;
+  color: #a82e3d;
+  background: #fffafb;
+  text-align: left;
+}
+
+.pipeline-recurrence > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.pipeline-recurrence small {
+  color: #a87278;
+  font-size: 8px;
+}
+
+.pipeline-recurrence strong {
+  font-size: 12px;
+}
+
+.pipeline-recurrence b {
+  font-size: 16px;
+}
+
+.dashboard-patient-directory .panel-header {
+  padding-bottom: 11px;
+}
+
+.dashboard-patient-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 0 16px 13px;
+}
+
+.dashboard-patient-filters button {
+  min-height: 31px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted-strong);
+  background: white;
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.dashboard-patient-filters button:hover {
+  border-color: #aebbc5;
+}
+
+.dashboard-patient-filters button.active {
+  color: white;
+  border-color: #6153b3;
+  background: #6153b3;
+}
+
+.security-card,
+.user-card {
+  box-shadow: none;
+}
+
+.security-card {
+  padding: 9px;
+  opacity: 0.78;
+}
+
+.user-card {
+  padding: 9px;
+}
+
+/* Dashboard calendar */
+
+.dashboard-calendar-modal {
+  width: min(1040px, calc(100vw - 32px));
+  max-width: 1040px;
+  max-height: min(820px, calc(100vh - 32px));
+  overflow: hidden;
+}
+
+.calendar-modal-header {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.calendar-modal-header h2 {
+  margin: 2px 0 0;
+  color: var(--ink);
+  font-size: 21px;
+}
+
+.calendar-modal-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  min-height: 540px;
+}
+
+.calendar-month-panel {
+  min-width: 0;
+  padding: 18px;
+}
+
+.calendar-month-toolbar {
+  display: grid;
+  grid-template-columns: 40px minmax(150px, 1fr) 40px auto;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 14px;
+}
+
+.calendar-month-toolbar > strong {
+  color: var(--ink);
+  font-size: 18px;
+  text-align: center;
+  text-transform: capitalize;
+}
+
+.calendar-today-button {
+  min-height: 40px;
+}
+
+.calendar-weekdays,
+.calendar-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.calendar-weekdays {
+  margin-bottom: 5px;
+}
+
+.calendar-weekdays span {
+  padding: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 720;
+  text-align: center;
+}
+
+.calendar-month-grid {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.calendar-day {
+  position: relative;
+  min-height: 68px;
+  padding: 9px;
+  border-right: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ink);
+  background: white;
+  font-size: 13px;
+  text-align: left;
+}
+
+.calendar-day:nth-child(7n) {
+  border-right: 0;
+}
+
+.calendar-day:nth-last-child(-n + 7) {
+  border-bottom: 0;
+}
+
+.calendar-day:hover {
+  background: #f8f9fb;
+}
+
+.calendar-day.outside-month {
+  color: #abb7c0;
+  background: #fafbfc;
+}
+
+.calendar-day.today > span {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border-radius: 50%;
+  color: white;
+  background: #6153b3;
+}
+
+.calendar-day.selected {
+  z-index: 1;
+  box-shadow: inset 0 0 0 2px #7062c3;
+}
+
+.calendar-day b {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: grid;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 5px;
+  place-items: center;
+  border-radius: 999px;
+  color: #5145a5;
+  background: #eeecff;
+  font-size: 10px;
+}
+
+.calendar-day-agenda {
+  min-width: 0;
+  border-left: 1px solid var(--line);
+  background: #fafbfc;
+}
+
+.calendar-agenda-heading {
+  display: flex;
+  min-height: 102px;
+  flex-direction: column;
+  gap: 3px;
+  justify-content: center;
+  padding: 15px 17px;
+  border-bottom: 1px solid var(--line);
+}
+
+.calendar-agenda-heading span,
+.calendar-agenda-heading small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.calendar-agenda-heading strong {
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.calendar-agenda-list {
+  max-height: 500px;
+  overflow-y: auto;
+  padding: 8px 12px;
+}
+
+.calendar-agenda-list > button {
+  display: grid;
+  width: 100%;
+  min-height: 65px;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 5px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: left;
+}
+
+.calendar-agenda-list time {
+  color: #5145a5;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.calendar-agenda-list > button > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.calendar-agenda-list strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-agenda-list span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.calendar-empty-day {
+  display: flex;
+  min-height: 210px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 7px;
+  padding: 20px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.calendar-empty-day strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.calendar-empty-day span {
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+@media (max-width: 960px) {
+  .operational-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .calendar-modal-body {
+    grid-template-columns: 1fr;
+    max-height: calc(100vh - 105px);
+    overflow-y: auto;
+  }
+
+  .calendar-day-agenda {
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .operational-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .operational-metrics .metric-card {
+    min-height: 70px;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    padding: 9px 10px;
+  }
+
+  .operational-metrics .metric-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .operational-metrics .metric-label {
+    font-size: 12px;
+  }
+
+  .operational-metrics .metric-card > strong {
+    font-size: 23px;
+  }
+
+  .action-queue-row {
+    grid-template-columns: 10px minmax(0, 1fr) auto;
+  }
+
+  .compact-care-pipeline {
+    grid-template-columns: repeat(5, minmax(145px, 1fr));
+  }
+
+  .pipeline-secondary-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pipeline-recurrence {
+    width: 100%;
+  }
+
+  .dashboard-calendar-modal {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+  }
+
+  .calendar-month-panel {
+    padding: 12px;
+  }
+
+  .calendar-month-toolbar {
+    grid-template-columns: 38px minmax(110px, 1fr) 38px;
+  }
+
+  .calendar-today-button {
+    grid-column: 1 / -1;
+  }
+
+  .calendar-day {
+    min-height: 49px;
+    padding: 6px;
+  }
+
+  .calendar-day b {
+    right: 4px;
+    bottom: 4px;
+    min-width: 18px;
+    height: 18px;
+  }
+}
+
 @media print {
   html[data-onkoflow-offline-ready="true"] body::after {
     display: none;

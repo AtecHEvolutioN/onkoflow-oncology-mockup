@@ -1,6 +1,6 @@
 # OnkoFlow: offline departmental application
 
-Tento postup instaluje offline verzi OnkoFlow 0.8.1. Pacientské záznamy se ukládají
+Tento postup instaluje offline verzi OnkoFlow 0.8.2. Pacientské záznamy se ukládají
 přímo do uživatelem vybrané složky `data`; aplikace při prvním spuštění vytvoří
 podsložky `patients`, `audit` a `backups`.
 

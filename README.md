@@ -1,12 +1,15 @@
 # OnkoFlow — GYN oncology care registry
 
-Czech-language departmental registry for tracking patients through an oncologic care pathway. Version 0.8.1 provides:
+Czech-language departmental registry for tracking patients through an oncologic care pathway. Version 0.8.2 provides:
 
 - a clinical operations dashboard;
 - an urgency-ranked action queue, date-first status indicators and an operational patient table;
 - a permanently available patient search in the application header;
 - a compact patient header and an enlarged, action-oriented patient workflow;
 - dense, clickable biopsy, staging and MDT summaries plus a scan-friendly clinical timeline;
+- a command-centre overview with clickable operational filters, a compact proportional
+  care pipeline and a content-driven action queue;
+- a functional monthly calendar with daily task counts and a selected-day agenda;
 - an empty registry on first use with searchable patient records;
 - responsive, touch-friendly desktop and mobile workflows;
 - a chronological care timeline;
@@ -55,7 +58,7 @@ Open [http://localhost:3000](http://localhost:3000).
 ### Edge PWA mode (no CMD or executable)
 
 For managed workstations that block command files, open the Vercel HTTPS app once
-in Microsoft Edge. Version 0.8.1 registers a versioned service worker, precaches the
+in Microsoft Edge. Version 0.8.2 registers a versioned service worker, precaches the
 complete static interface, and exposes a PWA manifest. After the green
 `Offline režim připraven` indicator appears, install it from Edge via
 **Apps → Install OnkoFlow**. Subsequent launches can use the cached interface without
