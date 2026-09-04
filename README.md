@@ -34,7 +34,7 @@ Open [http://localhost:3000](http://localhost:3000).
 ### Edge PWA mode (no CMD or executable)
 
 For managed workstations that block command files, open the Vercel HTTPS mockup once
-in Microsoft Edge. Version 0.5.1 registers a versioned service worker, precaches the
+in Microsoft Edge. Version 0.5.2 registers a versioned service worker, precaches the
 complete static interface, and exposes a PWA manifest. After the green
 `Offline režim připraven` indicator appears, install it from Edge via
 **Apps → Install OnkoFlow**. Subsequent launches can use the cached interface without
@@ -45,9 +45,10 @@ This is still a diagnostic proof of concept. Do not enter real patient data. A p
 origin and automatically updating service worker require hospital security approval
 before any clinical deployment.
 
-Version 0.5.1 adds a pilot login gate, explicit user identification and mandatory
-selection of the `data` directory. The client-side shared password is not production
-authentication. See the mandatory [production-readiness gates](docs/PRODUCTION-READINESS.md).
+Version 0.5.2 adds a pilot password gate and mandatory selection of the `data`
+directory. It does not capture or verify user identity. The client-side shared
+password is not production authentication. See the mandatory
+[production-readiness gates](docs/PRODUCTION-READINESS.md).
 
 ### Portable localhost package (only where policy permits CMD)
 

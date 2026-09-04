@@ -1,7 +1,7 @@
 {
-  "name": "OnkoFlow – onkologický proces (POC)",
+  "name": "OnkoFlow – GYN onkologický registr",
   "short_name": "OnkoFlow",
-  "description": "Diagnostický mockup pro sledování onkologického procesu bez ukládání klinických dat.",
+  "description": "GYN onkologický registr pro sledování průchodu pacienta procesem péče.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

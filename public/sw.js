@@ -1,9 +1,8 @@
-const CACHE_VERSION = "0.5.1";
+const CACHE_VERSION = "0.5.2";
 const CACHE_NAME = `onkoflow-shell-${CACHE_VERSION}`;
 const CORE_URLS = [
   "/",
   "/manifest.webmanifest",
-  "/icon.svg",
   "/pwa-192.png",
   "/pwa-512.png",
 ];

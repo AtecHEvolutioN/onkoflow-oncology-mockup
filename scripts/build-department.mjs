@@ -1,5 +1,4 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 function readGitValue(args, fallback) {
@@ -39,14 +38,6 @@ if (result.error) {
 if (result.status !== 0) {
   process.exit(result.status ?? 1);
 }
-
-const exportedIndex = join(process.cwd(), "out", "index.html");
-const indexHtml = readFileSync(exportedIndex, "utf8");
-const fileCompatibleHtml = indexHtml.replaceAll(
-  /\/icon\.svg\?[^"\\]+/g,
-  "./icon.svg",
-);
-writeFileSync(exportedIndex, fileCompatibleHtml, "utf8");
 
 const pwaVerification = spawnSync(
   process.execPath,

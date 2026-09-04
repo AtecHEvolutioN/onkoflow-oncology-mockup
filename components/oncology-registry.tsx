@@ -14,8 +14,8 @@ import {
   Eye,
   FileCheck2,
   FilePlus2,
+  FolderOpen,
   HardDrive,
-  HeartPulse,
   History,
   LayoutDashboard,
   ListChecks,
@@ -33,6 +33,7 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
+import Image from "next/image";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { StorageDiagnostics } from "@/components/storage-diagnostics";
 import { LoginScreen, type OnkoFlowSession } from "@/components/login-screen";
@@ -74,6 +75,7 @@ type BirthNumberResult = {
 };
 
 const demoToday = new Date("2026-09-01T12:00:00");
+const SESSION_ACTOR = "Uživatel oddělení";
 
 const navItems: Array<{
   id: Exclude<View, "patient">;
@@ -224,16 +226,6 @@ function formatBirthNumber(value: string) {
   const digits = value.replace(/\D/g, "");
   if (digits.length < 7) return value.trim();
   return `${digits.slice(0, 6)}/${digits.slice(6)}`;
-}
-
-function getInitials(value: string) {
-  return value
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0] ?? "")
-    .join("")
-    .toLocaleUpperCase("cs-CZ");
 }
 
 const phaseStyleIndex: Record<CarePhase, number> = {
@@ -484,7 +476,7 @@ export function OncologyRegistry() {
 
   const advancePatient = (input: WorkflowAdvanceInput) => {
     if (!selectedPatient || !session) return;
-    const updatedPatient = advancePatientThroughWorkflow(selectedPatient, input, session.userName);
+    const updatedPatient = advancePatientThroughWorkflow(selectedPatient, input, SESSION_ACTOR);
     if (!updatedPatient) {
       setToast("Pro posun pacienta je potřeba doplnit povinné údaje.");
       return;
@@ -514,11 +506,19 @@ export function OncologyRegistry() {
       <aside className={`sidebar ${sidebarOpen ? "sidebar-open" : ""}`}>
         <div className="brand">
           <div className="brand-mark" aria-hidden="true">
-            <HeartPulse size={24} />
+            <Image
+              className="brand-icon"
+              src="/pwa-512.png"
+              alt=""
+              width={38}
+              height={38}
+              priority
+              unoptimized
+            />
           </div>
           <div>
             <div className="brand-name">OnkoFlow</div>
-            <div className="brand-subtitle">Registr onkologické péče</div>
+            <div className="brand-subtitle">GYN onkologický registr</div>
           </div>
           <button
             className="sidebar-close"
@@ -567,16 +567,18 @@ export function OncologyRegistry() {
         </div>
 
         <div className="user-card">
-          <div className="avatar avatar-small">{getInitials(session.userName)}</div>
+          <div className="avatar avatar-small">
+            <FolderOpen size={17} aria-hidden="true" />
+          </div>
           <div className="user-card-copy">
-            <strong>{session.userName}</strong>
-            <span>Složka: {session.directoryName}</span>
+            <strong>Datová složka</strong>
+            <span>{session.directoryName}</span>
           </div>
           <button
             className="user-logout-button"
             type="button"
-            aria-label="Odhlásit uživatele"
-            title="Odhlásit"
+            aria-label="Odpojit datovou složku"
+            title="Odpojit"
             onClick={() => setSession(null)}
           >
             <LogOut size={17} aria-hidden="true" />
@@ -619,9 +621,11 @@ export function OncologyRegistry() {
           </div>
           <div className="topbar-actions">
             <div className="topbar-session" title={`Datová složka: ${session.directoryName}`}>
-              <span className="avatar avatar-tiny">{getInitials(session.userName)}</span>
+              <span className="avatar avatar-tiny">
+                <FolderOpen size={14} aria-hidden="true" />
+              </span>
               <div>
-                <strong>{session.userName}</strong>
+                <strong>Datová složka</strong>
                 <span>{session.directoryName}</span>
               </div>
             </div>
@@ -711,7 +715,7 @@ export function OncologyRegistry() {
 
       {isNewPatientOpen && !isDepartmentMode && (
         <NewPatientModal
-          currentUser={session.userName}
+          currentUser={SESSION_ACTOR}
           onClose={() => setIsNewPatientOpen(false)}
           onCreate={createPatient}
         />
@@ -720,7 +724,7 @@ export function OncologyRegistry() {
       {isNewEventOpen && selectedPatient && (
         <NewEventModal
           patient={selectedPatient}
-          currentUser={session.userName}
+          currentUser={SESSION_ACTOR}
           onClose={() => setIsNewEventOpen(false)}
           onCreate={addEvent}
         />

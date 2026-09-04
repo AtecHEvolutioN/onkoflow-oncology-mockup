@@ -19,6 +19,18 @@ requireCondition(index.includes('rel="manifest"'), "index.html does not link the
 requireCondition(index.includes("/sw.js"), "index.html does not register the service worker");
 requireCondition(index.includes("Přihlášení"), "index.html does not render the login gate");
 requireCondition(
+  index.includes('autoComplete="current-password"'),
+  "login gate does not contain the password field",
+);
+requireCondition(
+  !index.includes('autoComplete="username"'),
+  "login gate still contains the removed user field",
+);
+requireCondition(
+  !index.includes("login-security-note"),
+  "login gate still contains the removed disclaimer",
+);
+requireCondition(
   serviceWorker.includes(`const CACHE_VERSION = "${packageJson.version}"`),
   "service-worker cache version does not match package.json",
 );

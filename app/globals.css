@@ -122,11 +122,20 @@ p {
   height: 42px;
   margin-right: 11px;
   place-items: center;
+  overflow: hidden;
   border: 1px solid rgb(255 255 255 / 0.24);
   border-radius: 13px;
   color: white;
   background: linear-gradient(135deg, #20a69a, #0f766e);
   box-shadow: 0 8px 22px rgb(15 118 110 / 0.3);
+}
+
+.brand-icon,
+.login-brand-icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .brand-name {
@@ -2560,7 +2569,7 @@ p {
   height: 38px;
   border: 0;
   border-radius: 10px;
-  background: var(--teal);
+  background: var(--navy-900);
   box-shadow: none;
 }
 
@@ -5245,12 +5254,14 @@ html[data-onkoflow-offline-ready="true"] body::after {
 
 .login-brand-mark {
   display: grid;
-  width: 44px;
-  height: 44px;
+  width: 54px;
+  height: 54px;
+  flex: 0 0 auto;
+  overflow: hidden;
   place-items: center;
-  border: 1px solid rgb(255 255 255 / 0.2);
-  border-radius: 13px;
-  background: linear-gradient(135deg, #20a69a, var(--teal));
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: 15px;
+  background: var(--navy-950);
 }
 
 .login-brand > div,
@@ -5391,32 +5402,6 @@ html[data-onkoflow-offline-ready="true"] body::after {
   opacity: 0.55;
 }
 
-.login-security-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 15px 28px;
-  border-top: 1px solid var(--line-soft);
-  color: var(--teal);
-  background: #fafcfc;
-}
-
-.login-security-note svg {
-  flex: 0 0 auto;
-  margin-top: 1px;
-}
-
-.login-security-note p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1.5;
-}
-
-.login-security-note strong {
-  color: var(--ink);
-}
-
 .user-logout-button {
   display: grid;
   width: 32px;
@@ -5517,11 +5502,6 @@ html[data-onkoflow-offline-ready="true"] body::after {
 
   .login-directory .button {
     min-height: 44px;
-  }
-
-  .login-security-note {
-    padding-right: 20px;
-    padding-left: 20px;
   }
 
   .topbar-session > div {

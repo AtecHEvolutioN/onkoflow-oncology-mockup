@@ -1,12 +1,11 @@
 # OnkoFlow production-readiness gates
 
-OnkoFlow 0.5.1 is a pilot interface and storage-connectivity proof of concept. It is
+OnkoFlow 0.5.2 is a pilot interface and storage-connectivity proof of concept. It is
 not approved for real patient data. The following gates must all be completed before
 clinical use.
 
-## Current 0.5.1 safeguards
+## Current 0.5.2 safeguards
 
-- Explicit user identification at every application start.
 - Explicit selection of the `OnkoFlow\data` directory.
 - Read/write permission must be granted before the application opens.
 - The shared password is compared as a SHA-256 digest and is never stored in the
@@ -15,6 +14,8 @@ clinical use.
 - The installed PWA caches only application assets for offline use.
 - Patient filenames are not yet implemented; the current application still uses
   synthetic in-memory records.
+- User identity is not captured or verified; prototype actions use the generic label
+  `Uživatel oddělení`.
 
 The shared password is only a deterrent against accidental access. Because all
 client-side application code is delivered to the workstation, it cannot provide

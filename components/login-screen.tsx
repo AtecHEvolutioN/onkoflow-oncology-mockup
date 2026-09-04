@@ -3,13 +3,11 @@
 import {
   AlertTriangle,
   FolderOpen,
-  HeartPulse,
   KeyRound,
   LoaderCircle,
   LogIn,
-  ShieldCheck,
-  UserRound,
 } from "lucide-react";
+import Image from "next/image";
 import { FormEvent, useEffect, useState } from "react";
 import {
   loadDataDirectoryHandle,
@@ -26,7 +24,6 @@ const ACCESS_PASSWORD_SHA256 =
   "abcbbbb17cbb3464ad5edd16c79103f84b151616b3bb9c011422d8591d114b4a";
 
 export type OnkoFlowSession = {
-  userName: string;
   directoryName: string;
   directory: FileSystemDirectoryHandle;
 };
@@ -52,7 +49,6 @@ export function LoginScreen({
 }: {
   onLogin: (session: OnkoFlowSession) => void;
 }) {
-  const [userName, setUserName] = useState("");
   const [password, setPassword] = useState("");
   const [directory, setDirectory] = useState<FileSystemDirectoryHandle | null>(null);
   const [permission, setPermission] = useState<PermissionState | "unknown">("unknown");
@@ -124,10 +120,6 @@ export function LoginScreen({
     event.preventDefault();
     setError("");
 
-    if (!userName.trim()) {
-      setError("Vyplňte své jméno nebo služební identifikátor.");
-      return;
-    }
     if (!directory) {
       setError("Nejprve vyberte datovou složku OnkoFlow\\data.");
       return;
@@ -154,7 +146,6 @@ export function LoginScreen({
 
       await saveDataDirectoryHandle(directory);
       onLogin({
-        userName: userName.trim(),
         directoryName: directory.name,
         directory,
       });
@@ -170,38 +161,29 @@ export function LoginScreen({
       <section className="login-card" aria-labelledby="login-title">
         <div className="login-brand">
           <span className="login-brand-mark" aria-hidden="true">
-            <HeartPulse size={27} />
+            <Image
+              className="login-brand-icon"
+              src="/pwa-512.png"
+              alt=""
+              width={54}
+              height={54}
+              priority
+              unoptimized
+            />
           </span>
           <div>
             <strong>OnkoFlow</strong>
-            <span>Registr onkologické péče</span>
+            <span>GYN onkologický registr</span>
           </div>
         </div>
 
         <div className="login-heading">
           <p className="eyebrow">Přístup do aplikace</p>
           <h1 id="login-title">Přihlášení</h1>
-          <p>Identifikujte se a připojte datovou složku oddělení.</p>
+          <p>Připojte datovou složku oddělení a zadejte heslo.</p>
         </div>
 
         <form className="login-form" onSubmit={submit}>
-          <label className="form-field login-field">
-            <span>Uživatel</span>
-            <div className="login-input-wrap">
-              <UserRound size={18} aria-hidden="true" />
-              <input
-                value={userName}
-                onChange={(event) => setUserName(event.target.value)}
-                placeholder="Jméno a příjmení / služební ID"
-                autoComplete="username"
-                autoFocus
-              />
-            </div>
-            <small>
-              Prohlížeč nemá přístup k přihlášenému Windows účtu; identifikaci je nutné zadat.
-            </small>
-          </label>
-
           <label className="form-field login-field">
             <span>Heslo</span>
             <div className="login-input-wrap">
@@ -211,6 +193,7 @@ export function LoginScreen({
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete="current-password"
+                autoFocus
               />
             </div>
           </label>
@@ -263,14 +246,6 @@ export function LoginScreen({
             {isSubmitting ? "Ověřování…" : "Přihlásit se"}
           </button>
         </form>
-
-        <div className="login-security-note">
-          <ShieldCheck size={19} aria-hidden="true" />
-          <p>
-            <strong>Pilotní přístupová vrstva.</strong> Heslo se neukládá. Skutečné produkční
-            ověřování musí zajistit nemocniční identita nebo serverové SSO.
-          </p>
-        </div>
       </section>
     </main>
   );

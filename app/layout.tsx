@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title:
     process.env.NEXT_PUBLIC_ONKOFLOW_MODE === "department"
       ? "OnkoFlow | Diagnostika lokálního úložiště"
-      : "OnkoFlow | Demo registr onkologické péče",
+      : "OnkoFlow | GYN onkologický registr",
   description:
     process.env.NEXT_PUBLIC_ONKOFLOW_MODE === "department"
       ? "Diagnostická verze lokálního úložiště OnkoFlow bez ukládání klinických dat."
@@ -16,6 +16,10 @@ export const metadata: Metadata = {
     follow: false,
   },
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/pwa-192.png", sizes: "192x192", type: "image/png" }],
+    apple: [{ url: "/pwa-512.png", sizes: "512x512", type: "image/png" }],
+  },
 };
 
 export const viewport: Viewport = {
