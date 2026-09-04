@@ -798,61 +798,103 @@ function DashboardView({
           </div>
           <span className="panel-meta">Aktualizováno právě teď</span>
         </div>
-        <div className="phase-summary-grid">
-          {processSummarySteps.map((step) => {
-            const count = patients.filter((patient) => step.phases.includes(patient.phase)).length;
-            return (
-              <button
-                className={`phase-summary ${step.kind === "waiting" ? "waiting" : ""}`}
-                type="button"
-                key={step.number}
-                onClick={() => openPatientCategory(step.label, step.phases)}
-                aria-label={`${step.label}: ${count} pacientů. Otevřít seznam.`}
-              >
-                <span className={`phase-number phase-number-${step.tone}`}>
-                  {step.number}
-                </span>
-                <div>
-                  <strong>{step.label}</strong>
-                  {step.description ? <small>{step.description}</small> : null}
-                  <span>{count} pacientů</span>
+        <div className="process-tree-scroll">
+          <div className="process-tree" aria-label="Průchod pacienta onkologickou péčí">
+            <div className="process-tree-main">
+              <div className="process-tree-flow">
+                {processSummarySteps.slice(0, 7).map((step) => {
+                  const count = patients.filter((patient) =>
+                    step.phases.includes(patient.phase),
+                  ).length;
+                  const detail =
+                    corePathwaySteps.find((coreStep) => coreStep.phase === step.phases[0])
+                      ?.detail ?? step.description;
+
+                  return (
+                    <button
+                      className={`process-tree-node ${step.kind === "waiting" ? "waiting" : ""}`}
+                      type="button"
+                      key={step.number}
+                      onClick={() => openPatientCategory(step.label, step.phases)}
+                      aria-label={`${step.label}: ${count} pacientů. Otevřít seznam.`}
+                    >
+                      <span className="process-tree-node-head">
+                        <span className={`phase-number phase-number-${step.tone}`}>
+                          {step.number}
+                        </span>
+                        <span className="process-tree-count">
+                          <b>{count}</b> pac.
+                        </span>
+                      </span>
+                      <strong>{step.label}</strong>
+                      {detail ? <small>{detail}</small> : null}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="process-tree-branches">
+                <div className="process-tree-branch-heading">
+                  <span>Výstup MDT</span>
+                  <strong>Tři léčebné větve</strong>
                 </div>
-                <div className="phase-bar">
-                  <span style={{ width: `${Math.max(14, (count / patients.length) * 100)}%` }} />
+                <div className="process-tree-branch-list">
+                  {treatmentRoutes.map((route) => {
+                    const count = patients.filter(
+                      (patient) => patient.treatmentRoute === route.phase,
+                    ).length;
+                    return (
+                      <button
+                        className="process-route-card process-tree-route-card"
+                        type="button"
+                        key={route.code}
+                        onClick={() => openPatientCategory(route.phase, [route.phase])}
+                        aria-label={`${route.phase}: ${count} pacientů. Otevřít seznam.`}
+                      >
+                        <span className="route-code">{route.code}</span>
+                        <div>
+                          <strong>{route.phase}</strong>
+                          <small>{route.sites}</small>
+                          {route.next && (
+                            <span className="route-next">
+                              <ArrowRight size={13} aria-hidden="true" /> {route.next}
+                            </span>
+                          )}
+                        </div>
+                        <b>{count}</b>
+                      </button>
+                    );
+                  })}
                 </div>
-              </button>
-            );
-          })}
-        </div>
-        <div className="process-route-overview">
-          <div className="process-route-label">
-            <span>Výstup MDT</span>
-            <strong>Tři možné větve</strong>
-          </div>
-          {treatmentRoutes.map((route) => {
-            const count = patients.filter((patient) => patient.treatmentRoute === route.phase).length;
-            return (
-              <button
-                className="process-route-card"
-                type="button"
-                key={route.code}
-                onClick={() => openPatientCategory(route.phase, [route.phase])}
-                aria-label={`${route.phase}: ${count} pacientů. Otevřít seznam.`}
-              >
-                <span className="route-code">{route.code}</span>
-                <div>
-                  <strong>{route.phase}</strong>
-                  <small>{route.sites}</small>
-                  {route.next && (
-                    <span className="route-next">
-                      <ArrowRight size={13} aria-hidden="true" /> {route.next}
+              </div>
+            </div>
+
+            {processSummarySteps.slice(-1).map((step) => {
+              const count = patients.filter((patient) =>
+                step.phases.includes(patient.phase),
+              ).length;
+              return (
+                <div className="process-tree-recurrence" key={step.number}>
+                  <span className="process-tree-return-copy">
+                    <ArrowLeft size={15} aria-hidden="true" /> Restaging zpět do stagingu
+                  </span>
+                  <span className="process-tree-return-line" aria-hidden="true" />
+                  <button
+                    className="process-tree-recurrence-card"
+                    type="button"
+                    onClick={() => openPatientCategory(step.label, step.phases)}
+                    aria-label={`${step.label}: ${count} pacientů. Otevřít seznam.`}
+                  >
+                    <span className={`phase-number phase-number-${step.tone}`}>
+                      {step.number}
                     </span>
-                  )}
+                    <strong>{step.label}</strong>
+                    <b>{count} pac.</b>
+                  </button>
                 </div>
-                <b>{count}</b>
-              </button>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
         <div className="process-rule-note">
           <Microscope size={17} aria-hidden="true" />

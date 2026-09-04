@@ -845,6 +845,248 @@ p {
   overflow: hidden;
 }
 
+.process-tree-scroll {
+  overflow-x: auto;
+  border-top: 1px solid var(--line-soft);
+  background: white;
+  scrollbar-color: #cbd8df transparent;
+  scrollbar-width: thin;
+}
+
+.process-tree {
+  min-width: 1260px;
+  padding: 20px 18px 16px;
+}
+
+.process-tree-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 292px;
+  align-items: center;
+  gap: 52px;
+}
+
+.process-tree-flow {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(102px, 1fr));
+  align-items: stretch;
+  gap: 26px;
+}
+
+.process-tree-node {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 108px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid #d8e2e8;
+  border-radius: 10px;
+  background: white;
+  text-align: left;
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.process-tree-node:hover {
+  z-index: 2;
+  border-color: #8fc8bf;
+  box-shadow: 0 6px 18px rgb(18 40 59 / 0.08);
+  transform: translateY(-1px);
+}
+
+.process-tree-node.waiting {
+  border-style: dashed;
+  background: #f8fafc;
+}
+
+.process-tree-node:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -20px;
+  width: 14px;
+  border-top: 2px solid #1f4770;
+  transform: translateY(-50%);
+}
+
+.process-tree-node:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -22px;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 6px solid #1f4770;
+  transform: translateY(-50%);
+}
+
+.process-tree-node-head {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.process-tree-count {
+  color: var(--muted);
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.process-tree-count b {
+  color: var(--teal-dark);
+  font-size: 12px;
+}
+
+.process-tree-node > strong {
+  color: var(--ink);
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.process-tree-node > small {
+  color: var(--muted);
+  font-size: 7px;
+  line-height: 1.4;
+}
+
+.process-tree-branches {
+  position: relative;
+  min-width: 0;
+}
+
+.process-tree-branches::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -44px;
+  width: 27px;
+  border-top: 2px solid #1f4770;
+}
+
+.process-tree-branches::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 4px);
+  left: -18px;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 6px solid #1f4770;
+}
+
+.process-tree-branch-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.process-tree-branch-heading span {
+  color: var(--teal);
+  font-size: 8px;
+  font-weight: 780;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.process-tree-branch-heading strong {
+  color: var(--ink);
+  font-size: 10px;
+}
+
+.process-tree-branch-list {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding-left: 18px;
+}
+
+.process-tree-branch-list::before {
+  content: "";
+  position: absolute;
+  top: 34px;
+  bottom: 34px;
+  left: 2px;
+  border-left: 2px solid #1f4770;
+}
+
+.process-tree-route-card {
+  position: relative;
+  min-height: 68px;
+  padding: 10px;
+}
+
+.process-tree-route-card::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -16px;
+  width: 15px;
+  border-top: 2px solid #1f4770;
+}
+
+.process-tree-route-card::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 4px);
+  left: -2px;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 6px solid #1f4770;
+}
+
+.process-tree-recurrence {
+  display: grid;
+  grid-template-columns: auto minmax(90px, 1fr) 176px;
+  align-items: center;
+  gap: 10px;
+  margin: 17px 0 0 40%;
+}
+
+.process-tree-return-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #b44751;
+  font-size: 8px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.process-tree-return-line {
+  border-top: 2px dashed #e7848e;
+}
+
+.process-tree-recurrence-card {
+  display: grid;
+  min-height: 48px;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid #efb2b9;
+  border-radius: 9px;
+  color: var(--red);
+  background: #fff7f7;
+  text-align: left;
+}
+
+.process-tree-recurrence-card:hover {
+  background: #fff0f1;
+  box-shadow: 0 5px 14px rgb(185 46 59 / 0.08);
+}
+
+.process-tree-recurrence-card strong {
+  font-size: 10px;
+}
+
+.process-tree-recurrence-card b {
+  font-size: 9px;
+  white-space: nowrap;
+}
+
 .phase-summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -5518,6 +5760,102 @@ html[data-onkoflow-offline-ready="true"] body::after {
 
   .phase-filter-chip {
     min-height: 38px;
+  }
+
+  .process-tree-scroll {
+    overflow: visible;
+  }
+
+  .process-tree {
+    min-width: 0;
+    padding: 16px;
+  }
+
+  .process-tree-main {
+    grid-template-columns: 1fr;
+    gap: 34px;
+  }
+
+  .process-tree-flow {
+    grid-template-columns: 1fr;
+    gap: 26px;
+  }
+
+  .process-tree-node {
+    min-height: 82px;
+  }
+
+  .process-tree-node:not(:last-child)::after {
+    top: auto;
+    right: auto;
+    bottom: -19px;
+    left: 50%;
+    width: 0;
+    height: 13px;
+    border-top: 0;
+    border-left: 2px solid #1f4770;
+    transform: translateX(-50%);
+  }
+
+  .process-tree-node:not(:last-child)::before {
+    top: auto;
+    right: auto;
+    bottom: -22px;
+    left: 50%;
+    border-top: 6px solid #1f4770;
+    border-right: 4px solid transparent;
+    border-bottom: 0;
+    border-left: 4px solid transparent;
+    transform: translateX(-50%);
+  }
+
+  .process-tree-branches::before {
+    top: -27px;
+    left: 50%;
+    width: 0;
+    height: 16px;
+    border-top: 0;
+    border-left: 2px solid #1f4770;
+  }
+
+  .process-tree-branches::after {
+    top: -11px;
+    left: calc(50% - 4px);
+    border-top: 6px solid #1f4770;
+    border-right: 4px solid transparent;
+    border-bottom: 0;
+    border-left: 4px solid transparent;
+  }
+
+  .process-tree-branch-heading {
+    align-items: center;
+    flex-direction: column;
+    gap: 3px;
+    text-align: center;
+  }
+
+  .process-tree-recurrence {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin: 26px 0 0;
+  }
+
+  .process-tree-recurrence-card {
+    order: 1;
+  }
+
+  .process-tree-return-line {
+    width: 0;
+    height: 22px;
+    order: 2;
+    justify-self: center;
+    border-top: 0;
+    border-left: 2px dashed #e7848e;
+  }
+
+  .process-tree-return-copy {
+    order: 3;
+    justify-self: center;
   }
 }
 
