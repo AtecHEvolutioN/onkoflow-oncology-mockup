@@ -1,4 +1,4 @@
-import type { Patient } from "../registry-model";
+import type { Patient, TreatmentRoute } from "../registry-model";
 
 const REGISTRY_SCHEMA_VERSION = 2;
 const REGISTRY_MARKER_FILE = "onkoflow-registry.json";
@@ -183,6 +183,22 @@ function isPatient(value: unknown): value is Patient {
   return true;
 }
 
+const legacyTreatmentPhases: TreatmentRoute[] = [
+  "Primární operace",
+  "Neoadjuvantní léčba",
+  "Paliace",
+];
+
+function normalizePatientWorkflow(patient: Patient): Patient {
+  if (!legacyTreatmentPhases.includes(patient.phase as TreatmentRoute)) return patient;
+  const legacyRoute = patient.phase as TreatmentRoute;
+  return {
+    ...patient,
+    phase: "Terapie",
+    treatmentRoute: patient.treatmentRoute ?? legacyRoute,
+  };
+}
+
 function parsePatientRecord(value: unknown, expectedPatientId?: string): PatientRecord {
   if (!isRecord(value)) throw new RegistryDataError("Soubor pacienta nemá platný formát.");
   if (value.schemaVersion !== REGISTRY_SCHEMA_VERSION) {
@@ -202,7 +218,11 @@ function parsePatientRecord(value: unknown, expectedPatientId?: string): Patient
   if (expectedPatientId && value.patient.id !== expectedPatientId) {
     throw new RegistryDataError("Identifikátor pacienta neodpovídá názvu souboru.");
   }
-  return value as PatientRecord;
+  const record = value as PatientRecord;
+  return {
+    ...record,
+    patient: normalizePatientWorkflow(record.patient),
+  };
 }
 
 function parseAuditEvent(value: unknown): RepositoryAuditEvent {

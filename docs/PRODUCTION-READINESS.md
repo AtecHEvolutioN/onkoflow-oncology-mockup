@@ -1,10 +1,10 @@
 # OnkoFlow production-readiness gates
 
-OnkoFlow 0.7.1 is an operational folder-backed build. Application-level persistence
+OnkoFlow 0.7.2 is an operational folder-backed build. Application-level persistence
 is implemented, but this repository alone does not constitute hospital approval for
 processing real patient data.
 
-## Implemented in 0.7.1
+## Implemented in 0.7.2
 
 - Explicit selection of the `OnkoFlow\data` directory.
 - Read/write permission must be granted before the application opens.
@@ -18,6 +18,9 @@ processing real patient data.
   grouping of all patients assigned to a selected MDT date.
 - MDT records include structured operation, histology, follow-up, oncology, performance,
   NOR, recommendation and attendance fields.
+- The major phase after MDT is always `Terapie`; primary operation, neoadjuvant treatment
+  and palliation are stored and displayed as treatment modifiers. Legacy records are
+  normalized when loaded.
 - Every update creates a pre-update backup and a separate immutable audit event.
 - The application starts with an empty registry and does not load seeded patients.
 - User identity is not captured or verified; prototype actions use the generic label

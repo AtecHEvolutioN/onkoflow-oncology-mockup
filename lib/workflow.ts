@@ -72,6 +72,22 @@ export function getWorkflowAdvanceAction(patient: Patient): WorkflowAdvanceActio
     case "Čekání na výsledky stagingu":
     case "MDT":
       return null;
+    case "Terapie":
+      if (patient.treatmentRoute === "Neoadjuvantní léčba") {
+        return {
+          label: "Předat k operační léčbě",
+          targetLabel: "Terapie · Primární operace",
+          description: "Uzavře neoadjuvantní léčbu a změní modifikátor terapie na operační léčbu.",
+        };
+      }
+      if (patient.treatmentRoute === "Primární operace") {
+        return {
+          label: "Ukončit léčbu a zahájit sledování",
+          targetLabel: "Sledování",
+          description: "Uzavře primární léčbu a založí dispenzární kontrolu.",
+        };
+      }
+      return null;
     case "Neoadjuvantní léčba":
       return {
         label: "Předat k operační léčbě",
@@ -241,7 +257,7 @@ function getWorkflowTransitionPlan(
       };
       const details = routeDetails[input.treatmentRoute];
       return {
-        nextPhase: input.treatmentRoute,
+        nextPhase: "Terapie",
         progress: 75,
         nextStep: details.nextStep,
         nextStepDelayDays: details.nextStepDelayDays,
@@ -255,6 +271,33 @@ function getWorkflowTransitionPlan(
         },
       };
     }
+    case "Terapie":
+      if (patient.treatmentRoute === "Neoadjuvantní léčba") {
+        return {
+          nextPhase: "Terapie",
+          progress: 90,
+          nextStep: "Naplánovat operační výkon",
+          nextStepDelayDays: 14,
+          eventKind: "systemic",
+          eventTitle: "Neoadjuvantní léčba dokončena",
+          eventDescription:
+            "Neoadjuvantní léčba byla uzavřena. Modifikátor terapie byl změněn na primární operační léčbu.",
+          changes: { treatmentRoute: "Primární operace" },
+        };
+      }
+      if (patient.treatmentRoute === "Primární operace") {
+        return {
+          nextPhase: "Sledování",
+          progress: 100,
+          nextStep: "Dispenzární kontrola",
+          nextStepDelayDays: 90,
+          eventKind: "surgery",
+          eventTitle: "Primární léčba dokončena",
+          eventDescription:
+            "Operační léčba byla uzavřena. Pacient přechází do dispenzárního sledování.",
+        };
+      }
+      return null;
     case "Neoadjuvantní léčba":
       return {
         nextPhase: "Primární operace",

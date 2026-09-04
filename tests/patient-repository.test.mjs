@@ -171,3 +171,21 @@ test("increments revisions, creates a backup and rejects a stale update", async 
   const backups = await directory.getDirectoryHandle("backups");
   assert.equal(backups.entries.has("patient-1-r1.json"), true);
 });
+
+test("normalizes legacy treatment phases to a Terapie stage modifier", async () => {
+  const directory = new MemoryDirectoryHandle();
+  await createPatientRecord(
+    directory,
+    {
+      ...createPatient(),
+      phase: "Primární operace",
+      treatmentRoute: null,
+      progress: 80,
+    },
+    "tester",
+  );
+
+  const loaded = await loadRegistry(directory);
+  assert.equal(loaded.patients[0].phase, "Terapie");
+  assert.equal(loaded.patients[0].treatmentRoute, "Primární operace");
+});

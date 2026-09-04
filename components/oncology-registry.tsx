@@ -275,6 +275,7 @@ const phaseStyleIndex: Record<CarePhase, number> = {
   Staging: 2,
   "Čekání na výsledky stagingu": 2,
   MDT: 3,
+  Terapie: 4,
   "Primární operace": 4,
   "Neoadjuvantní léčba": 4,
   Paliace: 4,
@@ -282,15 +283,22 @@ const phaseStyleIndex: Record<CarePhase, number> = {
   Recidiva: 5,
 };
 
-function PhaseBadge({ phase }: { phase: CarePhase }) {
+function PhaseBadge({
+  phase,
+  treatmentRoute,
+}: {
+  phase: CarePhase;
+  treatmentRoute?: TreatmentRoute | null;
+}) {
   const waiting = phase.startsWith("Čekání");
+  const label = phase === "Terapie" && treatmentRoute ? `Terapie · ${treatmentRoute}` : phase;
   return (
     <span
       className={`phase-badge phase-${phaseStyleIndex[phase]} ${
         waiting ? "phase-badge-waiting" : ""
       }`}
     >
-      {phase}
+      {label}
     </span>
   );
 }
@@ -389,43 +397,22 @@ function PatientPathway({
         })}
       </div>
 
-      <div className="treatment-decision-heading">
-        <span>5</span>
+      <div className={`therapy-modifier ${patient.treatmentRoute ? "selected" : ""}`}>
+        <span className="therapy-modifier-label">Modifikátor terapie</span>
         <div>
-          <strong>Rozhodnutí po MDT</strong>
-          <small>
-            {patient.treatmentRoute
-              ? `Zvolená větev: ${patient.treatmentRoute}`
-              : "Léčebná větev zatím nebyla určena"}
-          </small>
+          <strong>{patient.treatmentRoute ?? "Modifikátor terapie zatím nebyl určen"}</strong>
+          {patient.treatmentRoute ? (
+            <small>
+              {patient.treatmentSite ??
+                treatmentRoutes.find((route) => route.label === patient.treatmentRoute)?.sites}
+            </small>
+          ) : (
+            <small>Větev se zvolí v závěru MDT.</small>
+          )}
         </div>
-      </div>
-
-      <div className="treatment-route-grid">
-        {treatmentRoutes.map((route) => {
-          const selected = patient.treatmentRoute === route.phase;
-          const completed = selected && patient.phase === "Sledování";
-          return (
-            <div
-              className={`treatment-route ${selected ? "selected" : ""} ${completed ? "completed" : ""}`}
-              key={route.code}
-            >
-              <span className="route-code">{route.code}</span>
-              <div>
-                <strong>{route.phase}</strong>
-                <small>
-                  {selected && patient.treatmentSite ? patient.treatmentSite : route.sites}
-                </small>
-                {route.next && (
-                  <span className="route-next">
-                    <ArrowRight size={13} aria-hidden="true" /> {route.next}
-                  </span>
-                )}
-              </div>
-              {selected && <CircleCheck size={18} aria-label="Zvolená léčebná větev" />}
-            </div>
-          );
-        })}
+        {patient.treatmentRoute ? (
+          <CircleCheck size={18} aria-label="Zvolený modifikátor terapie" />
+        ) : null}
       </div>
 
       <div className={`recurrence-route ${patient.recurrence ? "active" : ""}`}>
@@ -986,6 +973,7 @@ function DashboardView({
   const highPriority = patients.filter((patient) => patient.priority === "Vysoká").length;
   const inTreatment = patients.filter(
     (patient) =>
+      patient.phase === "Terapie" ||
       patient.phase === "Primární operace" ||
       patient.phase === "Neoadjuvantní léčba" ||
       patient.phase === "Paliace",
@@ -1032,7 +1020,7 @@ function DashboardView({
         </div>
         <div className="process-tree-scroll">
           <div className="process-tree" aria-label="Průchod pacienta onkologickou péčí">
-            <div className="process-tree-main">
+            <div className="process-tree-main process-tree-main-stages-only">
               <div className="process-tree-flow">
                 {processSummarySteps.slice(0, -1).map((step) => {
                   const count = patients.filter((patient) =>
@@ -1068,44 +1056,18 @@ function DashboardView({
                       </span>
                       <strong>{step.label}</strong>
                       {detail ? <small>{detail}</small> : null}
+                      {step.label === "Terapie" ? (
+                        <span className="process-therapy-modifiers" aria-label="Modifikátory terapie">
+                          {treatmentRoutes.map((route) => (
+                            <span key={route.code}>
+                              {route.label} · {patients.filter((patient) => patient.treatmentRoute === route.label).length}
+                            </span>
+                          ))}
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })}
-              </div>
-
-              <div className="process-tree-branches">
-                <div className="process-tree-branch-heading">
-                  <span>Výstup MDT</span>
-                  <strong>Tři léčebné větve</strong>
-                </div>
-                <div className="process-tree-branch-list">
-                  {treatmentRoutes.map((route) => {
-                    const count = patients.filter(
-                      (patient) => patient.treatmentRoute === route.phase,
-                    ).length;
-                    return (
-                      <button
-                        className="process-route-card process-tree-route-card"
-                        type="button"
-                        key={route.code}
-                        onClick={() => openPatientCategory(route.phase, [route.phase])}
-                        aria-label={`${route.phase}: ${count} pacientů. Otevřít seznam.`}
-                      >
-                        <span className="route-code">{route.code}</span>
-                        <div>
-                          <strong>{route.phase}</strong>
-                          <small>{route.sites}</small>
-                          {route.next && (
-                            <span className="route-next">
-                              <ArrowRight size={13} aria-hidden="true" /> {route.next}
-                            </span>
-                          )}
-                        </div>
-                        <b>{count}</b>
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
             </div>
 
@@ -1210,7 +1172,7 @@ function DashboardView({
                     {patient.primaryDiagnosisCode} · {patient.primaryDiagnosisLabel}
                   </span>
                 </div>
-                <PhaseBadge phase={patient.phase} />
+                <PhaseBadge phase={patient.phase} treatmentRoute={patient.treatmentRoute} />
                 <div className="next-step-cell">
                   <span>{patient.nextStep}</span>
                   <strong>{formatDate(patient.nextStepDate)}</strong>
@@ -1495,7 +1457,7 @@ function PatientsView({
                     <div className="patient-mobile-diagnosis">
                       <span>{patient.primaryDiagnosisCode}</span>
                       <strong>{patient.primaryDiagnosisLabel}</strong>
-                      <PhaseBadge phase={patient.phase} />
+                      <PhaseBadge phase={patient.phase} treatmentRoute={patient.treatmentRoute} />
                     </div>
                     <div className="patient-mobile-next">
                       <div>
@@ -1595,7 +1557,7 @@ function PatientDetail({
             <h2 id="patient-pathway-heading">Průběh onkologickou péčí</h2>
           </div>
           <div className="patient-pathway-status">
-            <PhaseBadge phase={patient.phase} />
+            <PhaseBadge phase={patient.phase} treatmentRoute={patient.treatmentRoute} />
             <span className="progress-value">{patient.progress} % procesu</span>
           </div>
         </div>
@@ -1640,7 +1602,7 @@ function PatientDetail({
                 <p className="eyebrow">Onkologická epizoda</p>
                 <h2>Diagnóza a stav péče</h2>
               </div>
-              <PhaseBadge phase={patient.phase} />
+              <PhaseBadge phase={patient.phase} treatmentRoute={patient.treatmentRoute} />
             </div>
             <div className="diagnosis-highlight">
               <div className="diagnosis-code-large">{patient.primaryDiagnosisCode}</div>
@@ -2287,7 +2249,7 @@ function StageDetailModal({
           attendees: mdtDetails.attendees.trim(),
         },
         treatmentRoute: effectiveRoute,
-        phase: mayAdvance && effectiveRoute ? effectiveRoute : patient.phase,
+        phase: mayAdvance && effectiveRoute ? "Terapie" : patient.phase,
         progress: mayAdvance ? Math.max(patient.progress, 80) : patient.progress,
         nextStep:
           getPatientMajorStageIndex(patient) > 3
@@ -2590,7 +2552,7 @@ function StageDetailModal({
 
                 <fieldset className="route-choice">
                   <legend>Léčebná strategie</legend>
-                  <div className="route-choice-grid">{treatmentRoutes.map((route) => <label className={`route-choice-option ${treatmentRoute === route.phase ? "selected" : ""}`} key={route.code}><input type="radio" name="stage-route" checked={treatmentRoute === route.phase} onChange={() => setTreatmentRoute(route.phase)} disabled={getPatientMajorStageIndex(patient) > 3} /><span className="route-code">{route.code}</span><span className="route-choice-copy"><strong>{route.phase}</strong><small>{route.sites}</small>{route.next ? <em>{route.next}</em> : null}</span></label>)}</div>
+                  <div className="route-choice-grid">{treatmentRoutes.map((route) => <label className={`route-choice-option ${treatmentRoute === route.label ? "selected" : ""}`} key={route.code}><input type="radio" name="stage-route" checked={treatmentRoute === route.label} onChange={() => setTreatmentRoute(route.label)} disabled={getPatientMajorStageIndex(patient) > 3} /><span className="route-code">{route.code}</span><span className="route-choice-copy"><strong>{route.label}</strong><small>{route.sites}</small>{route.next ? <em>{route.next}</em> : null}</span></label>)}</div>
                 </fieldset>
               </div>
             ) : null}
@@ -3196,7 +3158,7 @@ function AdvancePatientModal({
           <div className="advance-summary" id="advance-patient-description">
             <div className="advance-summary-step">
               <span>Aktuální fáze</span>
-              <PhaseBadge phase={patient.phase} />
+              <PhaseBadge phase={patient.phase} treatmentRoute={patient.treatmentRoute} />
             </div>
             <span className="advance-summary-arrow" aria-hidden="true">
               <ArrowRight size={20} />
@@ -3395,29 +3357,29 @@ function AdvancePatientModal({
 
           {patient.phase === "MDT" ? (
             <fieldset className="route-choice advance-choice">
-              <legend>Léčebná větev doporučená MDT *</legend>
-              <p>Volba nastaví další fázi i nejbližší klinický krok.</p>
+              <legend>Léčebná strategie doporučená MDT *</legend>
+              <p>Volba nastaví modifikátor fáze Terapie a nejbližší klinický krok.</p>
               <div className="route-choice-grid">
                 {treatmentRoutes.map((route) => (
                   <label
                     className={`route-choice-option ${
-                      treatmentRoute === route.phase ? "selected" : ""
+                      treatmentRoute === route.label ? "selected" : ""
                     }`}
                     key={route.code}
                   >
                     <input
                       type="radio"
                       name="treatment-route"
-                      value={route.phase}
-                      checked={treatmentRoute === route.phase}
+                      value={route.label}
+                      checked={treatmentRoute === route.label}
                       onChange={() => {
-                        setTreatmentRoute(route.phase);
+                        setTreatmentRoute(route.label);
                         setFormError("");
                       }}
                     />
                     <span className="route-code">{route.code}</span>
                     <span className="route-choice-copy">
-                      <strong>{route.phase}</strong>
+                      <strong>{route.label}</strong>
                       <small>{route.sites}</small>
                       {route.next ? <em>{route.next}</em> : null}
                     </span>

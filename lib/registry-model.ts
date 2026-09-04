@@ -8,7 +8,9 @@ export type TreatmentRoute = "Primární operace" | "Neoadjuvantní léčba" | "
 
 export type CarePhase =
   | CoreCarePhase
+  | "Terapie"
   | LegacyWaitingCarePhase
+  // Kept only so records created by versions <= 0.7.1 can be loaded and migrated.
   | TreatmentRoute
   | "Sledování"
   | "Recidiva";
@@ -140,23 +142,23 @@ export const corePathwaySteps: Array<{
   { phase: "Biopsie", number: "2", detail: "termín · výsledek" },
   { phase: "Staging", number: "3", detail: "vyšetření · výsledky" },
   { phase: "MDT", number: "4", detail: "termín · závěr" },
-  { phase: "Terapie", number: "5", detail: "léčebná větev" },
+  { phase: "Terapie", number: "5", detail: "léčebná strategie" },
 ];
 
 export const treatmentRoutes: Array<{
   code: "A" | "B" | "C";
-  phase: TreatmentRoute;
+  label: TreatmentRoute;
   sites: string;
   next: string | null;
 }> = [
-  { code: "A", phase: "Primární operace", sites: "ÚVN / externí pracoviště", next: null },
+  { code: "A", label: "Primární operace", sites: "ÚVN / externí pracoviště", next: null },
   {
     code: "B",
-    phase: "Neoadjuvantní léčba",
+    label: "Neoadjuvantní léčba",
     sites: "ÚVN / Motol / externí pracoviště",
     next: "Následně operační léčba",
   },
-  { code: "C", phase: "Paliace", sites: "Individuální plán symptomatické péče", next: null },
+  { code: "C", label: "Paliace", sites: "Individuální plán symptomatické péče", next: null },
 ];
 
 export const processSummarySteps: Array<{
@@ -184,7 +186,7 @@ export const processSummarySteps: Array<{
   {
     number: "5",
     label: "Terapie",
-    phases: ["Primární operace", "Neoadjuvantní léčba", "Paliace", "Sledování"],
+    phases: ["Terapie", "Primární operace", "Neoadjuvantní léčba", "Paliace"],
     tone: 5,
   },
   { number: "6", label: "Recidiva", phases: ["Recidiva"], tone: 6 },

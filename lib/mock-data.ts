@@ -15,6 +15,7 @@ export type TreatmentRoute =
 
 export type CarePhase =
   | CoreCarePhase
+  | "Terapie"
   | WaitingCarePhase
   | TreatmentRoute
   | "Sledování"
@@ -155,7 +156,7 @@ export const initialPatients: Patient[] = [
     treatmentRoute: "Primární operace",
     treatmentSite: "ÚVN",
     recurrence: false,
-    phase: "Primární operace",
+    phase: "Terapie",
     progress: 80,
     physician: "MUDr. Lucie Demo",
     nextStep: "Předoperační kontrola",
@@ -515,30 +516,30 @@ export const corePathwaySteps: Array<{
   { phase: "Biopsie", number: "2", detail: "termín · výsledek" },
   { phase: "Staging", number: "3", detail: "vyšetření · výsledky" },
   { phase: "MDT", number: "4", detail: "termín · závěr" },
-  { phase: "Terapie", number: "5", detail: "léčebná větev" },
+  { phase: "Terapie", number: "5", detail: "léčebná strategie" },
 ];
 
 export const treatmentRoutes: Array<{
   code: "A" | "B" | "C";
-  phase: TreatmentRoute;
+  label: TreatmentRoute;
   sites: string;
   next: string | null;
 }> = [
   {
     code: "A",
-    phase: "Primární operace",
+    label: "Primární operace",
     sites: "ÚVN / externí pracoviště",
     next: null,
   },
   {
     code: "B",
-    phase: "Neoadjuvantní léčba",
+    label: "Neoadjuvantní léčba",
     sites: "ÚVN / Motol / externí pracoviště",
     next: "Následně operační léčba",
   },
   {
     code: "C",
-    phase: "Paliace",
+    label: "Paliace",
     sites: "Individuální plán symptomatické péče",
     next: null,
   },
@@ -566,7 +567,7 @@ export const processSummarySteps: Array<{
   {
     number: "5",
     label: "Terapie",
-    phases: ["Primární operace", "Neoadjuvantní léčba", "Paliace", "Sledování"],
+    phases: ["Terapie", "Primární operace", "Neoadjuvantní léčba", "Paliace"],
     tone: 5,
     kind: "phase",
   },

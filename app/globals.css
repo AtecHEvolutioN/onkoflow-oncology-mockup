@@ -864,7 +864,7 @@ p {
 }
 
 .process-tree {
-  min-width: 1260px;
+  min-width: 960px;
   padding: 20px 18px 16px;
 }
 
@@ -873,6 +873,18 @@ p {
   grid-template-columns: minmax(0, 1fr) 292px;
   align-items: center;
   gap: 52px;
+}
+
+.process-tree-main-stages-only {
+  display: block;
+}
+
+.process-tree-main-stages-only .process-tree-flow {
+  grid-template-columns: repeat(5, minmax(160px, 1fr));
+}
+
+.process-tree-main-stages-only .process-tree-node {
+  min-height: 142px;
 }
 
 .process-tree-flow {
@@ -960,6 +972,27 @@ p {
   color: var(--muted);
   font-size: 7px;
   line-height: 1.4;
+}
+
+.process-therapy-modifiers {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.process-therapy-modifiers > span {
+  overflow: hidden;
+  padding: 3px 5px;
+  border-radius: 5px;
+  color: var(--teal-dark);
+  background: var(--teal-soft);
+  font-size: 7px;
+  font-weight: 680;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .process-tree-branches {
@@ -1894,16 +1927,56 @@ p {
   border-style: solid;
 }
 
-.treatment-decision-heading {
-  display: flex;
+.therapy-modifier {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 10px;
-  margin: 17px 22px 10px;
-  padding-top: 15px;
-  border-top: 1px solid var(--line-soft);
+  margin: 17px 22px 0;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: #fbfcfd;
 }
 
-.treatment-decision-heading > span,
+.therapy-modifier.selected {
+  border-style: solid;
+  border-color: #7fc0b7;
+  background: var(--teal-soft);
+}
+
+.therapy-modifier > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.therapy-modifier-label {
+  padding: 5px 7px;
+  border-radius: 6px;
+  color: var(--teal-dark);
+  background: white;
+  font-size: 7px;
+  font-weight: 780;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.therapy-modifier strong {
+  color: var(--ink);
+  font-size: 9px;
+}
+
+.therapy-modifier small {
+  color: var(--muted);
+  font-size: 7px;
+}
+
+.therapy-modifier > svg {
+  color: var(--teal);
+}
+
 .recurrence-route > span {
   display: grid;
   width: 28px;
@@ -1917,7 +1990,6 @@ p {
   font-weight: 780;
 }
 
-.treatment-decision-heading > div,
 .recurrence-route > div {
   display: flex;
   min-width: 0;
@@ -1925,13 +1997,11 @@ p {
   gap: 3px;
 }
 
-.treatment-decision-heading strong,
 .recurrence-route strong {
   color: var(--ink);
   font-size: 9px;
 }
 
-.treatment-decision-heading small,
 .recurrence-route small {
   color: var(--muted);
   font-size: 7px;
@@ -3029,13 +3099,13 @@ p {
 }
 
 .pathway-step strong,
-.treatment-decision-heading strong,
+.therapy-modifier strong,
 .recurrence-route strong {
   font-size: 11px;
 }
 
 .pathway-step span,
-.treatment-decision-heading small,
+.therapy-modifier small,
 .recurrence-route small {
   font-size: 10px;
 }
@@ -3322,10 +3392,6 @@ p {
     grid-template-columns: repeat(5, minmax(112px, 1fr));
     overflow-x: auto;
     padding-bottom: 12px;
-  }
-
-  .treatment-route-grid {
-    grid-template-columns: 1fr;
   }
 
   .timeline-event {
@@ -4172,29 +4238,19 @@ p {
     white-space: normal;
   }
 
-  .treatment-decision-heading {
-    margin: 10px 16px;
-    padding-top: 13px;
+  .therapy-modifier {
+    margin: 10px 16px 0;
+    padding: 12px;
   }
 
-  .treatment-decision-heading strong,
+  .therapy-modifier strong,
   .recurrence-route strong {
     font-size: 12px;
   }
 
-  .treatment-decision-heading small,
+  .therapy-modifier small,
   .recurrence-route small {
     font-size: 10px;
-  }
-
-  .treatment-route-grid {
-    gap: 8px;
-    padding: 0 16px;
-  }
-
-  .treatment-route {
-    min-height: 76px;
-    padding: 12px;
   }
 
   .recurrence-route {
