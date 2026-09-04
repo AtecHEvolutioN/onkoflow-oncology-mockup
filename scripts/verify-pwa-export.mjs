@@ -48,9 +48,10 @@ function collectTextAssets(directory) {
   });
 }
 
+const plaintextPilotPassword = ["onko", "uvn1"].join("");
 for (const path of collectTextAssets(output)) {
   requireCondition(
-    !readFileSync(path, "utf8").includes("onkouvn1"),
+    !readFileSync(path, "utf8").includes(plaintextPilotPassword),
     `plaintext pilot password leaked into exported asset: ${path}`,
   );
 }

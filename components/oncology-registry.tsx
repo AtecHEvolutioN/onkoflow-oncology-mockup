@@ -1230,6 +1230,23 @@ function PatientDetail({
         </div>
       </section>
 
+      <section
+        className="panel care-pathway-panel patient-profile-pathway"
+        aria-labelledby="patient-pathway-heading"
+      >
+        <div className="panel-header patient-pathway-header">
+          <div>
+            <p className="eyebrow">Aktuální fáze pacienta</p>
+            <h2 id="patient-pathway-heading">Průběh onkologickou péčí</h2>
+          </div>
+          <div className="patient-pathway-status">
+            <PhaseBadge phase={patient.phase} />
+            <span className="progress-value">{patient.progress} % procesu</span>
+          </div>
+        </div>
+        <PatientPathway patient={patient} />
+      </section>
+
       <section className="mobile-next-action panel" aria-label="Nejbližší krok">
         <span className="mobile-next-action-icon">
           <CalendarDays size={20} aria-hidden="true" />
@@ -1342,17 +1359,6 @@ function PatientDetail({
                 </ul>
               </article>
             ) : null}
-          </section>
-
-          <section className="panel care-pathway-panel">
-            <div className="panel-header">
-              <div>
-                <p className="eyebrow">Cesta pacienta</p>
-                <h2>Průběh podle klinického procesu</h2>
-              </div>
-              <span className="progress-value">{patient.progress} %</span>
-            </div>
-            <PatientPathway patient={patient} />
           </section>
 
           <section className="panel timeline-panel">

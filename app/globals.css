@@ -1485,6 +1485,18 @@ p {
   padding-bottom: 21px;
 }
 
+.patient-profile-pathway {
+  margin-bottom: 12px;
+}
+
+.patient-pathway-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 12px;
+}
+
 .progress-value {
   color: var(--teal);
   font-size: 12px;
@@ -3809,6 +3821,15 @@ p {
 
   .care-pathway-panel {
     padding-bottom: 14px;
+  }
+
+  .patient-pathway-header {
+    align-items: flex-start;
+  }
+
+  .patient-pathway-status {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .pathway-steps {

@@ -56,6 +56,7 @@ export function LoginScreen({
   const [password, setPassword] = useState("");
   const [directory, setDirectory] = useState<FileSystemDirectoryHandle | null>(null);
   const [permission, setPermission] = useState<PermissionState | "unknown">("unknown");
+  const [isSupported, setIsSupported] = useState(true);
   const [isChecking, setIsChecking] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -67,6 +68,7 @@ export function LoginScreen({
       const capability = getStorageCapability();
       if (!capability.isSecureContext || !capability.hasDirectoryPicker) {
         if (active) {
+          setIsSupported(false);
           setError(
             "Tento způsob otevření nepodporuje bezpečný výběr složky. Použijte nainstalovanou aplikaci OnkoFlow v Microsoft Edge.",
           );
@@ -78,6 +80,10 @@ export function LoginScreen({
       try {
         const restored = await loadDataDirectoryHandle();
         if (!active || !restored) return;
+        if (restored.name.toLocaleLowerCase("cs-CZ") !== "data") {
+          setError("Dříve zvolená složka není OnkoFlow\\data. Vyberte správnou datovou složku.");
+          return;
+        }
         setDirectory(restored);
         setPermission(await queryReadWritePermission(restored));
       } catch (restoreError) {
@@ -230,7 +236,7 @@ export function LoginScreen({
               className="button button-secondary"
               type="button"
               onClick={selectDirectory}
-              disabled={isChecking}
+              disabled={isChecking || !isSupported}
             >
               <FolderOpen size={17} aria-hidden="true" />
               {directory ? "Změnit složku" : "Vybrat složku"}
@@ -247,7 +253,7 @@ export function LoginScreen({
           <button
             className="button button-primary login-submit"
             type="submit"
-            disabled={isSubmitting || isChecking}
+            disabled={isSubmitting || isChecking || !isSupported}
           >
             {isSubmitting ? (
               <LoaderCircle className="spin" size={18} aria-hidden="true" />

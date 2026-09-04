@@ -1,10 +1,10 @@
 # OnkoFlow production-readiness gates
 
-OnkoFlow 0.5.0 is a pilot interface and storage-connectivity proof of concept. It is
+OnkoFlow 0.5.1 is a pilot interface and storage-connectivity proof of concept. It is
 not approved for real patient data. The following gates must all be completed before
 clinical use.
 
-## Current 0.5.0 safeguards
+## Current 0.5.1 safeguards
 
 - Explicit user identification at every application start.
 - Explicit selection of the `OnkoFlow\data` directory.
