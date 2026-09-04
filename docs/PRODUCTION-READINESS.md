@@ -1,10 +1,10 @@
 # OnkoFlow production-readiness gates
 
-OnkoFlow 0.7.0 is an operational folder-backed build. Application-level persistence
+OnkoFlow 0.7.1 is an operational folder-backed build. Application-level persistence
 is implemented, but this repository alone does not constitute hospital approval for
 processing real patient data.
 
-## Implemented in 0.7.0
+## Implemented in 0.7.1
 
 - Explicit selection of the `OnkoFlow\data` directory.
 - Read/write permission must be granted before the application opens.

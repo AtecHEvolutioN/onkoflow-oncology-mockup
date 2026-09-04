@@ -307,6 +307,16 @@ function getMdtDisplayStatus(patient: Patient) {
   return getMdtStatus(patient, todayIso());
 }
 
+function getPatientStagingDetails(patient: Patient): StagingExamination[] {
+  if (patient.stagingDetails?.length) return patient.stagingDetails;
+  return patient.stagingExaminations.map((name) => ({
+    id: `legacy-${name}`,
+    name,
+    date: "",
+    result: "",
+  }));
+}
+
 function getInitialMdtDetails(patient: Patient): MdtDetails {
   return {
     surgeryPerformed: "",
@@ -849,6 +859,7 @@ export function OncologyRegistry() {
               openPatient={openPatient}
               navigate={navigate}
               openPatientCategory={openPatientCategory}
+              openNewPatient={() => setIsNewPatientOpen(true)}
             />
           )}
           {activeView === "patients" && (
@@ -857,8 +868,6 @@ export function OncologyRegistry() {
               query={searchQuery}
               setQuery={setSearchQuery}
               openPatient={openPatient}
-              openNewPatient={() => setIsNewPatientOpen(true)}
-              allowPatientCreation
               phaseFilter={patientPhaseFilter}
               clearPhaseFilter={() => setPatientPhaseFilter(null)}
             />
@@ -965,12 +974,14 @@ function DashboardView({
   openPatient,
   navigate,
   openPatientCategory,
+  openNewPatient,
 }: {
   patients: Patient[];
   tasks: CareTask[];
   openPatient: (id: string) => void;
   navigate: (view: View) => void;
   openPatientCategory: (label: string, phases: CarePhase[]) => void;
+  openNewPatient: () => void;
 }) {
   const highPriority = patients.filter((patient) => patient.priority === "Vysoká").length;
   const inTreatment = patients.filter(
@@ -1036,8 +1047,16 @@ function DashboardView({
                       className="process-tree-node"
                       type="button"
                       key={step.number}
-                      onClick={() => openPatientCategory(step.label, step.phases)}
-                      aria-label={`${step.label}: ${count} pacientů. Otevřít seznam.`}
+                      onClick={() =>
+                        step.label === "Příjem"
+                          ? openNewPatient()
+                          : openPatientCategory(step.label, step.phases)
+                      }
+                      aria-label={
+                        step.label === "Příjem"
+                          ? "Přijmout nového pacienta do péče"
+                          : `${step.label}: ${count} pacientů. Otevřít seznam.`
+                      }
                     >
                       <span className="process-tree-node-head">
                         <span className={`phase-number phase-number-${step.tone}`}>
@@ -1258,8 +1277,6 @@ function PatientsView({
   query,
   setQuery,
   openPatient,
-  openNewPatient,
-  allowPatientCreation,
   phaseFilter,
   clearPhaseFilter,
 }: {
@@ -1267,8 +1284,6 @@ function PatientsView({
   query: string;
   setQuery: (value: string) => void;
   openPatient: (id: string) => void;
-  openNewPatient: () => void;
-  allowPatientCreation: boolean;
   phaseFilter: PatientPhaseFilter | null;
   clearPhaseFilter: () => void;
 }) {
@@ -1335,12 +1350,6 @@ function PatientsView({
               : "Seznam pacientů seřazený podle data MDT."}
           </p>
         </div>
-        {allowPatientCreation ? (
-          <button className="button button-primary" type="button" onClick={openNewPatient}>
-            <Plus size={18} aria-hidden="true" />
-            Přijmout pacienta do péče
-          </button>
-        ) : null}
       </div>
 
       <section className="panel patient-directory">
@@ -1540,6 +1549,7 @@ function PatientDetail({
   openStage: (stage: MajorStage) => void;
 }) {
   const advanceAction = getWorkflowAdvanceAction(patient);
+  const patientStagingDetails = getPatientStagingDetails(patient);
   const currentEditableStage: MajorStage | null =
     patient.phase === "Biopsie" || patient.phase === "Čekání na výsledek biopsie"
       ? "Biopsie"
@@ -1654,6 +1664,16 @@ function PatientDetail({
                 <strong>{patient.secondaryDiagnoses.join(", ") || "Bez záznamu"}</strong>
               </div>
             </div>
+            <div className="clinical-data-actions">
+              <button className="button button-secondary" type="button" onClick={() => openStage("Biopsie")}>
+                <Microscope size={16} aria-hidden="true" />
+                Otevřít / upravit biopsii
+              </button>
+              <button className="button button-secondary" type="button" onClick={() => openStage("Staging")}>
+                <ScanLine size={16} aria-hidden="true" />
+                Otevřít / upravit staging
+              </button>
+            </div>
             {patient.biopsyResult ? (
               <article className="external-biopsy-result">
                 <div className="external-biopsy-result-header">
@@ -1670,6 +1690,14 @@ function PatientDetail({
                     </span>
                     <strong>{patient.biopsyResult.facility}</strong>
                   </div>
+                  <button
+                    className="result-edit-button"
+                    type="button"
+                    onClick={() => openStage("Biopsie")}
+                  >
+                    <PencilLine size={15} aria-hidden="true" />
+                    Upravit
+                  </button>
                 </div>
                 <p>
                   {patient.biopsyResult.conclusion ||
@@ -1688,7 +1716,7 @@ function PatientDetail({
                 </div>
               </article>
             ) : null}
-            {patient.stagingExaminations.length > 0 ? (
+            {patientStagingDetails.length > 0 ? (
               <article className="staging-examination-result">
                 <div className="staging-examination-result-header">
                   <span className="staging-examination-result-icon">
@@ -1702,12 +1730,28 @@ function PatientDetail({
                     </span>
                     <strong>Provedená vyšetření</strong>
                   </div>
+                  <button
+                    className="result-edit-button"
+                    type="button"
+                    onClick={() => openStage("Staging")}
+                  >
+                    <PencilLine size={15} aria-hidden="true" />
+                    Upravit
+                  </button>
                 </div>
-                <ul>
-                  {patient.stagingExaminations.map((examination) => (
-                    <li key={examination}>
+                <ul className="staging-result-list">
+                  {patientStagingDetails.map((examination) => (
+                    <li key={examination.id}>
                       <CircleCheck size={16} aria-hidden="true" />
-                      {examination}
+                      <div>
+                        <strong>{examination.name}</strong>
+                        <span>
+                          {examination.date
+                            ? formatLongDate(examination.date)
+                            : "Bez zadaného termínu"}
+                        </span>
+                      </div>
+                      <p>{examination.result || "Závěr zatím není zadán."}</p>
                     </li>
                   ))}
                 </ul>
@@ -2015,14 +2059,10 @@ function StageDetailModal({
     patient.biopsyResult?.conclusion ?? "",
   );
   const [stagingDetails, setStagingDetails] = useState<StagingExamination[]>(() =>
-    patient.stagingDetails?.length
-      ? patient.stagingDetails
-      : patient.stagingExaminations.map((name) => ({
-          id: crypto.randomUUID(),
-          name,
-          date: "",
-          result: "",
-        })),
+    getPatientStagingDetails(patient).map((examination) => ({
+      ...examination,
+      id: examination.id.startsWith("legacy-") ? crypto.randomUUID() : examination.id,
+    })),
   );
   const [customExamination, setCustomExamination] = useState("");
   const [mdtDate, setMdtDate] = useState(patient.mdtDate ?? "");
@@ -2337,10 +2377,104 @@ function StageDetailModal({
 
             {stage === "Staging" ? (
               <div className="form-section stage-form-section">
-                <div className="stage-live-status"><strong>{getStagingDisplayStatus({ ...patient, stagingDetails })}</strong></div>
-                <fieldset className="staging-checklist"><legend>Požadovaná vyšetření</legend><div className="staging-choice-grid">{standardStagingExaminations.map((name) => <label className={`staging-choice ${stagingDetails.some((item) => item.name === name) ? "selected" : ""}`} key={name}><input type="checkbox" checked={stagingDetails.some((item) => item.name === name)} onChange={() => toggleStagingExamination(name)} /><span>{name}</span></label>)}</div></fieldset>
-                <div className="staging-add-row"><input value={customExamination} onChange={(event) => setCustomExamination(event.target.value)} placeholder="Další stagingové vyšetření…" /><button className="button button-secondary" type="button" onClick={addCustomExamination}><Plus size={16} /> Přidat</button></div>
-                <div className="staging-detail-list">{stagingDetails.map((examination) => <article className="staging-detail-card" key={examination.id}><div><strong>{examination.name}</strong><span>{getExaminationStatus(examination)}</span><button type="button" aria-label={`Odebrat ${examination.name}`} onClick={() => toggleStagingExamination(examination.name)}><X size={15} /></button></div><label className="form-field"><span>Datum vyšetření</span><input type="date" value={examination.date} onChange={(event) => updateStagingExamination(examination.id, "date", event.target.value)} /></label><label className="form-field"><span>Výsledek</span><textarea rows={3} value={examination.result} onChange={(event) => updateStagingExamination(examination.id, "result", event.target.value)} placeholder="Výsledek lze doplnit později…" /></label></article>)}</div>
+                <div className="stage-live-status">
+                  <strong>{getStagingDisplayStatus({ ...patient, stagingDetails })}</strong>
+                </div>
+
+                <fieldset className="staging-picker">
+                  <legend>Přidat požadované vyšetření</legend>
+                  <div className="staging-picker-grid">
+                    {standardStagingExaminations.map((name) => {
+                      const selected = stagingDetails.some((item) => item.name === name);
+                      return (
+                        <label
+                          className={`staging-picker-option ${selected ? "selected" : ""}`}
+                          key={name}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => toggleStagingExamination(name)}
+                          />
+                          <span>{name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="staging-add-row">
+                    <input
+                      value={customExamination}
+                      onChange={(event) => setCustomExamination(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          addCustomExamination();
+                        }
+                      }}
+                      placeholder="Další stagingové vyšetření nebo onkomarker…"
+                    />
+                    <button
+                      className="button button-secondary"
+                      type="button"
+                      onClick={addCustomExamination}
+                    >
+                      <Plus size={16} aria-hidden="true" /> Přidat
+                    </button>
+                  </div>
+                </fieldset>
+
+                {stagingDetails.length ? (
+                  <div className="staging-examination-table">
+                    <div className="staging-examination-table-head" aria-hidden="true">
+                      <span>Vyšetření</span>
+                      <span>Datum</span>
+                      <span>Závěr</span>
+                      <span>Stav</span>
+                      <span />
+                    </div>
+                    {stagingDetails.map((examination) => (
+                      <article className="staging-examination-row" key={examination.id}>
+                        <strong className="staging-examination-name">{examination.name}</strong>
+                        <label className="form-field staging-date-field">
+                          <span>Datum vyšetření</span>
+                          <input
+                            type="date"
+                            value={examination.date}
+                            onChange={(event) =>
+                              updateStagingExamination(examination.id, "date", event.target.value)
+                            }
+                          />
+                        </label>
+                        <label className="form-field staging-conclusion-field">
+                          <span>Závěr vyšetření</span>
+                          <textarea
+                            rows={2}
+                            value={examination.result}
+                            onChange={(event) =>
+                              updateStagingExamination(examination.id, "result", event.target.value)
+                            }
+                            placeholder="Závěr lze doplnit později…"
+                          />
+                        </label>
+                        <span className="staging-row-status">
+                          {getExaminationStatus(examination)}
+                        </span>
+                        <button
+                          className="staging-remove-button"
+                          type="button"
+                          aria-label={`Odebrat ${examination.name}`}
+                          onClick={() => toggleStagingExamination(examination.name)}
+                        >
+                          <X size={16} aria-hidden="true" />
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="staging-empty-selection">
+                    Vyberte alespoň jedno vyšetření nebo onkomarker.
+                  </div>
+                )}
               </div>
             ) : null}
 
@@ -2349,6 +2483,55 @@ function StageDetailModal({
                 <div className="stage-live-status">
                   <strong>{getMdtDisplayStatus({ ...patient, mdtDate, mdtConclusion })}</strong>
                 </div>
+
+                <section className="mdt-form-block">
+                  <div className="mdt-form-heading">
+                    <strong>Podklady k MDT</strong>
+                    <span>Souhrn biopsie, stagingu, onkomarkerů a jejich závěrů</span>
+                  </div>
+                  <div className="mdt-evidence-list">
+                    {patient.biopsyResult ? (
+                      <article className="mdt-evidence-row">
+                        <div>
+                          <strong>Biopsie / histologie</strong>
+                          <span>{patient.biopsyResult.facility}</span>
+                        </div>
+                        <time dateTime={patient.biopsyResult.date}>
+                          {formatLongDate(patient.biopsyResult.date)}
+                        </time>
+                        <p>
+                          {patient.biopsyResult.conclusion ||
+                            "Histologický závěr zatím není k dispozici."}
+                        </p>
+                        <span className="mdt-evidence-status">
+                          {getBiopsyDisplayStatus(patient)}
+                        </span>
+                      </article>
+                    ) : null}
+                    {stagingDetails.map((examination) => (
+                      <article className="mdt-evidence-row" key={examination.id}>
+                        <div>
+                          <strong>{examination.name}</strong>
+                          <span>Staging / laboratorní podklad</span>
+                        </div>
+                        <time dateTime={examination.date || undefined}>
+                          {examination.date
+                            ? formatLongDate(examination.date)
+                            : "Termín nezadán"}
+                        </time>
+                        <p>{examination.result || "Závěr zatím není zadán."}</p>
+                        <span className="mdt-evidence-status">
+                          {getExaminationStatus(examination)}
+                        </span>
+                      </article>
+                    ))}
+                    {!patient.biopsyResult && !stagingDetails.length ? (
+                      <div className="mdt-evidence-empty">
+                        Nejsou uložené žádné diagnostické ani stagingové podklady.
+                      </div>
+                    ) : null}
+                  </div>
+                </section>
 
                 <section className="mdt-form-block">
                   <div className="mdt-form-heading">

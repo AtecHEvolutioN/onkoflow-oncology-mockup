@@ -6023,6 +6023,55 @@ html[data-onkoflow-offline-ready="true"] body::after {
   gap: 18px;
 }
 
+.clinical-data-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 20px 16px;
+}
+
+.result-edit-button {
+  display: inline-flex;
+  min-height: 32px;
+  margin-left: auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--teal-dark);
+  background: white;
+  font-size: 9px;
+  font-weight: 720;
+}
+
+.staging-result-list li {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 0.45fr) minmax(180px, 1fr);
+  align-items: start;
+}
+
+.staging-result-list li > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.staging-result-list li > div strong {
+  color: var(--ink);
+}
+
+.staging-result-list li > div span,
+.staging-result-list li > p {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.staging-result-list li > p {
+  margin: 0;
+  line-height: 1.45;
+}
+
 .stage-live-status {
   padding: 12px 14px;
   border: 1px solid #b9ded8;
@@ -6034,6 +6083,140 @@ html[data-onkoflow-offline-ready="true"] body::after {
 
 .biopsy-choice-grid.two-options {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.staging-picker {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8fafb;
+}
+
+.staging-picker legend {
+  padding: 0 6px;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 740;
+}
+
+.staging-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.staging-picker-option {
+  display: flex;
+  min-width: 0;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--ink);
+  background: white;
+  font-size: 10px;
+  font-weight: 680;
+  cursor: pointer;
+}
+
+.staging-picker-option.selected {
+  border-color: #79b8b0;
+  color: var(--teal-dark);
+  background: var(--teal-soft);
+}
+
+.staging-picker-option input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  accent-color: var(--teal);
+}
+
+.staging-examination-table {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+}
+
+.staging-examination-table-head,
+.staging-examination-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.55fr) 150px minmax(240px, 1fr) 130px 34px;
+  gap: 10px;
+}
+
+.staging-examination-table-head {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  background: #f7f9fa;
+  font-size: 8px;
+  font-weight: 740;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.staging-examination-row {
+  align-items: center;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.staging-examination-row:last-child {
+  border-bottom: 0;
+}
+
+.staging-examination-name {
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.staging-examination-row .form-field > span {
+  display: none;
+}
+
+.staging-examination-row .form-field textarea {
+  min-height: 54px;
+}
+
+.staging-row-status {
+  padding: 6px 8px;
+  border-radius: 999px;
+  color: var(--teal-dark);
+  background: var(--teal-soft);
+  font-size: 9px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.staging-remove-button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+}
+
+.staging-remove-button:hover {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
+.staging-empty-selection,
+.mdt-evidence-empty {
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  background: #fafbfc;
+  font-size: 10px;
+  text-align: center;
 }
 
 .staging-detail-list {
@@ -6102,10 +6285,72 @@ html[data-onkoflow-offline-ready="true"] body::after {
 }
 
 .mdt-form-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 9px 13px;
   color: var(--navy-900);
   background: #eaf3f2;
   font-size: 11px;
+}
+
+.mdt-form-heading > span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.mdt-evidence-list {
+  display: grid;
+  gap: 0;
+}
+
+.mdt-evidence-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.55fr) 145px minmax(220px, 1fr) 145px;
+  align-items: start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.mdt-evidence-row:last-child {
+  border-bottom: 0;
+}
+
+.mdt-evidence-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mdt-evidence-row strong {
+  color: var(--ink);
+  font-size: 10px;
+}
+
+.mdt-evidence-row > div span,
+.mdt-evidence-row time,
+.mdt-evidence-row p {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.mdt-evidence-row p {
+  margin: 0;
+  color: var(--muted-strong);
+  line-height: 1.5;
+}
+
+.mdt-evidence-status {
+  padding: 6px 8px;
+  border-radius: 999px;
+  color: var(--teal-dark);
+  background: var(--teal-soft);
+  font-size: 9px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .mdt-form-block > .form-grid,
@@ -6161,6 +6406,48 @@ html[data-onkoflow-offline-ready="true"] body::after {
   }
 
   .registry-state-actions {
+    flex-direction: column;
+  }
+
+  .clinical-data-actions {
+    flex-direction: column;
+  }
+
+  .clinical-data-actions .button {
+    width: 100%;
+  }
+
+  .staging-picker-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .staging-examination-table-head {
+    display: none;
+  }
+
+  .staging-examination-row,
+  .mdt-evidence-row {
+    grid-template-columns: 1fr;
+  }
+
+  .staging-examination-row .form-field > span {
+    display: block;
+  }
+
+  .staging-remove-button {
+    justify-self: end;
+  }
+
+  .staging-result-list li {
+    grid-template-columns: auto 1fr;
+  }
+
+  .staging-result-list li > p {
+    grid-column: 2;
+  }
+
+  .mdt-form-heading {
+    align-items: flex-start;
     flex-direction: column;
   }
 

@@ -128,6 +128,11 @@ test("increments revisions, creates a backup and rejects a stale update", async 
   const updated = {
     ...patient,
     nextStep: "Čekání na termín biopsie",
+    stagingExaminations: ["CT", "CA 125"],
+    stagingDetails: [
+      { id: "exam-ct", name: "CT", date: "2026-09-12", result: "Bez metastáz" },
+      { id: "exam-ca125", name: "CA 125", date: "2026-09-08", result: "42 kU/l" },
+    ],
     mdtDate: "2026-09-10",
     mdtDetails: {
       surgeryPerformed: "Ano",
@@ -161,6 +166,7 @@ test("increments revisions, creates a backup and rejects a stale update", async 
   assert.equal(loaded.revisions[patient.id], 2);
   assert.equal(loaded.patients[0].mdtDetails.operator, "MUDr. Test");
   assert.equal(loaded.patients[0].mdtDate, "2026-09-10");
+  assert.equal(loaded.patients[0].stagingDetails[1].result, "42 kU/l");
   assert.equal(loaded.auditEvents.length, 2);
   const backups = await directory.getDirectoryHandle("backups");
   assert.equal(backups.entries.has("patient-1-r1.json"), true);
