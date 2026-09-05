@@ -1,10 +1,13 @@
-const CACHE_VERSION = "0.8.2";
+const CACHE_VERSION = "0.9.0";
 const CACHE_NAME = `onkoflow-shell-${CACHE_VERSION}`;
 const CORE_URLS = [
   "/",
   "/manifest.webmanifest",
+  "/brand-logo.png",
+  "/brand-symbol.png",
   "/pwa-192.png",
   "/pwa-512.png",
+  "/data/mkn-10-cz-2026.json",
 ];
 
 async function precacheApplication() {

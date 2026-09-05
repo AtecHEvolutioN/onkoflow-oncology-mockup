@@ -34,9 +34,14 @@ import {
   X,
 } from "lucide-react";
 import Image from "next/image";
+import styles from "./registry-workspace.module.css";
 import { FormEvent, Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { StorageDiagnostics } from "@/components/storage-diagnostics";
 import { LoginScreen, type OnkoFlowSession } from "@/components/login-screen";
+import {
+  MknDiagnosisPicker,
+  type MknDiagnosis,
+} from "@/components/mkn-diagnosis-picker";
 import {
   BiopsyStatus,
   CareTask,
@@ -47,7 +52,6 @@ import {
   StagingExamination,
   TimelineEvent,
   TreatmentRoute,
-  diagnoses,
   corePathwaySteps,
   processSummarySteps,
   standardStagingExaminations,
@@ -89,6 +93,14 @@ type BirthNumberResult = {
 type MajorStage = "Příjem" | "Biopsie" | "Staging" | "MDT" | "Terapie";
 
 const SESSION_ACTOR = "Uživatel oddělení";
+
+const DEFAULT_MKN_DIAGNOSIS: MknDiagnosis = {
+  code: "C54.1",
+  label: "Zhoubný novotvar - endometrium - sliznice",
+  chapter: "II",
+  group: "C51-C58",
+  terminal: true,
+};
 
 function todayIso() {
   const date = new Date();
@@ -644,11 +656,13 @@ function PatientPathway({
               }`}
               key={step.phase}
               onClick={() => onSelectStage(step.phase)}
+              aria-current={active ? "step" : undefined}
             >
               <div className="pathway-node">
-                {completed ? <Check size={15} aria-hidden="true" /> : step.number}
+                {step.number}
               </div>
               <strong>{step.phase}</strong>
+              <small className="pathway-position">{active ? "Právě zde" : completed ? "Předchozí fáze" : "Další fáze"}</small>
               <span>{detail}</span>
             </button>
           );
@@ -1138,14 +1152,18 @@ export function OncologyRegistry() {
     );
   }
 
+  const patientStageClass = selectedPatient
+    ? ["intake", "biopsy", "staging", "mdt", "therapy"][getPatientMajorStageIndex(selectedPatient)]
+    : "none";
+
   return (
-    <div className="app-shell">
+    <div className={`${styles.workspace} app-shell app-view-${activeView} app-stage-${patientStageClass}`}>
       <aside className={`sidebar ${sidebarOpen ? "sidebar-open" : ""}`}>
         <div className="brand">
           <div className="brand-mark" aria-hidden="true">
             <Image
               className="brand-icon"
-              src="/pwa-512.png"
+              src="/brand-symbol.png"
               alt=""
               width={38}
               height={38}
@@ -1183,7 +1201,11 @@ export function OncologyRegistry() {
                   aria-current={active ? "page" : undefined}
                 >
                   <Icon size={20} aria-hidden="true" />
-                  <span>{item.label}</span>
+                  <span className="nav-item-copy">{item.label}
+                    {item.id === "dashboard" ? <small>Co řešit dnes</small> : null}
+                    {item.id === "patients" ? <small>Seznam a vyhledávání</small> : null}
+                    {item.id === "tasks" ? <small>Kalendář a termíny</small> : null}
+                  </span>
                   {item.id === "tasks" ? <span className="nav-count">{tasks.length}</span> : null}
                 </button>
               </Fragment>
@@ -1230,7 +1252,7 @@ export function OncologyRegistry() {
         />
       )}
 
-      <main className="main-content">
+      <main className={`main-content view-${activeView}`}>
         <header className="topbar">
           <button
             className="icon-button topbar-back-button"
@@ -1250,10 +1272,17 @@ export function OncologyRegistry() {
           >
             <Menu size={21} />
           </button>
-          <div className="topbar-location">
-            <span>Gynekologická onkologie</span>
-            <strong>{currentViewLabel}</strong>
-          </div>
+          <nav className="workspace-breadcrumb" aria-label="Drobečková navigace">
+            {activeView !== "dashboard" ? <>
+              <button type="button" onClick={() => navigate("dashboard")}>Přehled</button>
+              <ChevronRight size={14} aria-hidden="true" />
+            </> : null}
+            {activeView === "patient" ? <>
+              <button type="button" onClick={() => navigate("patients")}>Pacienti</button>
+              <ChevronRight size={14} aria-hidden="true" />
+            </> : null}
+            <strong aria-current="page">{currentViewLabel}</strong>
+          </nav>
           <form
             className="topbar-search"
             role="search"
@@ -1294,7 +1323,7 @@ export function OncologyRegistry() {
           </div>
         </header>
 
-        <section className="page-content">
+        <section className={`page-content page-content-${activeView}`}>
           {registryMessage ? (
             <div className="storage-alert warning registry-warning" role="alert">
               <AlertTriangle size={18} aria-hidden="true" />
@@ -1325,6 +1354,7 @@ export function OncologyRegistry() {
           )}
           {activeView === "patient" && selectedPatient && (
             <PatientDetail
+              key={selectedPatient.id}
               patient={selectedPatient}
               openNewEvent={() => setIsNewEventOpen(true)}
               openAdvancePhase={() => setIsAdvancePhaseOpen(true)}
@@ -2142,6 +2172,7 @@ function PatientDetail({
   openAdvancePhase: () => void;
   openStage: (stage: MajorStage) => void;
 }) {
+  const [section, setSection] = useState<"care" | "history">("care");
   const advanceAction = getWorkflowAdvanceAction(patient);
   const patientStagingDetails = getPatientStagingDetails(patient);
   const completedStagingCount = patientStagingDetails.filter(
@@ -2167,26 +2198,26 @@ function PatientDetail({
             </div>
           </div>
         </div>
-        <div className="patient-hero-actions">
-          <button className="button button-secondary" type="button" onClick={openNewEvent}>
-            <Plus size={18} aria-hidden="true" />
-            Nová událost
-          </button>
-        </div>
       </section>
 
+      <nav className="patient-section-nav" aria-label="Sekce pacienta">
+        <button type="button" aria-pressed={section === "care"} onClick={() => setSection("care")}>
+          <Stethoscope size={19} aria-hidden="true" /> Péče a výsledky
+        </button>
+        <button type="button" aria-pressed={section === "history"} onClick={() => setSection("history")}>
+          <History size={19} aria-hidden="true" /> Historie <span>{patient.events.length}</span>
+        </button>
+      </nav>
+
+      {section === "care" ? <>
       <section
         className="panel care-pathway-panel patient-profile-pathway"
         aria-labelledby="patient-pathway-heading"
       >
         <div className="panel-header patient-pathway-header">
           <div>
-            <p className="eyebrow">Aktuální fáze pacienta</p>
-            <h2 id="patient-pathway-heading">Průběh onkologické péče</h2>
-          </div>
-          <div className="patient-pathway-status">
-            <PhaseBadge phase={patient.phase} treatmentRoute={patient.treatmentRoute} />
-            <span className="progress-value">{patient.progress} % procesu</span>
+            <h2 id="patient-pathway-heading">Kde je pacient v léčbě</h2>
+            <p>Kliknutím na kteroukoli fázi otevřete její údaje a výsledky.</p>
           </div>
         </div>
         <PatientPathway
@@ -2197,15 +2228,11 @@ function PatientDetail({
         />
       </section>
 
-      <div className="patient-detail-grid">
-        <div className="patient-detail-main">
           <section className="panel diagnosis-overview">
             <div className="panel-header compact">
               <div>
-                <p className="eyebrow">Onkologická epizoda</p>
-                <h2>Diagnóza a stav péče</h2>
+                <h2>Diagnóza a podklady</h2>
               </div>
-              <PhaseBadge phase={patient.phase} treatmentRoute={patient.treatmentRoute} />
             </div>
             <div className="diagnosis-highlight">
               <strong>{patient.primaryDiagnosisCode}</strong>
@@ -2274,12 +2301,12 @@ function PatientDetail({
               </button>
             </div>
           </section>
-
+      </> : (
           <section className="panel timeline-panel">
             <div className="panel-header">
               <div>
-                <p className="eyebrow">Chronologický záznam</p>
-                <h2>Časová osa</h2>
+                <h2>Historie péče</h2>
+                <p>Záznamy od nejnovějšího. Výsledky upravíte v sekci Péče a výsledky.</p>
               </div>
               <button
                 className="button button-soft"
@@ -2292,7 +2319,8 @@ function PatientDetail({
               </button>
             </div>
             <div className="timeline">
-              {patient.events.map((event) => {
+              {patient.events.length === 0 ? <p className="history-empty">Zatím nejsou zaznamenány žádné události.</p> : null}
+              {[...patient.events].sort((a, b) => `${b.date}T${b.time || "00:00"}`.localeCompare(`${a.date}T${a.time || "00:00"}`)).map((event) => {
                 const Icon = eventIcons[event.kind];
                 return (
                   <article className="timeline-event" key={event.id}>
@@ -2316,34 +2344,7 @@ function PatientDetail({
               })}
             </div>
           </section>
-        </div>
-
-        <aside className="patient-detail-aside">
-          <section className="panel info-card">
-            <div className="panel-header compact">
-              <h2>Kontrolní body</h2>
-            </div>
-            <div className="checklist">
-              <div className="checklist-row done">
-                <CircleCheck size={18} aria-hidden="true" />
-                <span>Identifikace ověřena</span>
-              </div>
-              <div className="checklist-row done">
-                <CircleCheck size={18} aria-hidden="true" />
-                <span>Hlavní diagnóza zadána</span>
-              </div>
-              <div className="checklist-row done">
-                <CircleCheck size={18} aria-hidden="true" />
-                <span>Odpovědný lékař určen</span>
-              </div>
-              <div className="checklist-row">
-                <Clock3 size={18} aria-hidden="true" />
-                <span>Dokončení aktuální fáze</span>
-              </div>
-            </div>
-          </section>
-        </aside>
-      </div>
+      )}
     </>
   );
 }
@@ -3085,7 +3086,9 @@ function NewPatientModal({
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [intakeDate, setIntakeDate] = useState(todayIso);
-  const [primaryDiagnosis, setPrimaryDiagnosis] = useState("C54.1");
+  const [primaryDiagnosis, setPrimaryDiagnosis] = useState<MknDiagnosis>(
+    DEFAULT_MKN_DIAGNOSIS,
+  );
   const [certainty, setCertainty] = useState<Patient["diagnosisCertainty"]>("Suspektní");
   const [biopsyStatus, setBiopsyStatus] = useState<BiopsyStatus>("Nutno provést");
   const [biopsyDate, setBiopsyDate] = useState("");
@@ -3093,13 +3096,12 @@ function NewPatientModal({
   const [biopsyReference, setBiopsyReference] = useState("");
   const [biopsyConclusion, setBiopsyConclusion] = useState("");
   const [secondaryDiagnoses, setSecondaryDiagnoses] = useState<string[]>([]);
-  const [secondarySelection, setSecondarySelection] = useState("");
+  const [secondarySelection, setSecondarySelection] = useState<MknDiagnosis | null>(null);
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const birthNumberResult = useMemo(() => parseBirthNumber(birthNumber), [birthNumber]);
-  const selectedDiagnosis =
-    diagnoses.find((diagnosis) => diagnosis.code === primaryDiagnosis) ?? diagnoses[0];
+  const selectedDiagnosis = primaryDiagnosis;
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -3110,9 +3112,9 @@ function NewPatientModal({
   }, [onClose]);
 
   const addSecondaryDiagnosis = () => {
-    if (!secondarySelection || secondaryDiagnoses.includes(secondarySelection)) return;
-    setSecondaryDiagnoses((current) => [...current, secondarySelection]);
-    setSecondarySelection("");
+    if (!secondarySelection || secondaryDiagnoses.includes(secondarySelection.code)) return;
+    setSecondaryDiagnoses((current) => [...current, secondarySelection.code]);
+    setSecondarySelection(null);
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -3244,7 +3246,7 @@ function NewPatientModal({
         </div>
 
         <form onSubmit={submit}>
-          <div className="form-section">
+          <div className="form-section form-section-identity">
             <div className="form-section-heading">
               <span>1</span>
               <div>
@@ -3287,7 +3289,7 @@ function NewPatientModal({
             </div>
           </div>
 
-          <div className="form-section">
+          <div className="form-section form-section-diagnosis">
             <div className="form-section-heading">
               <span>2</span>
               <div>
@@ -3308,34 +3310,34 @@ function NewPatientModal({
                   <option>Histologicky potvrzená</option>
                 </select>
               </label>
-              <label className="form-field full-column">
-                <span>Hlavní diagnóza MKN-10 *</span>
-                <select value={primaryDiagnosis} onChange={(event) => setPrimaryDiagnosis(event.target.value)}>
-                  {diagnoses.map((diagnosis) => (
-                    <option key={diagnosis.code} value={diagnosis.code}>
-                      {diagnosis.code} — {diagnosis.label}
-                    </option>
-                  ))}
-                </select>
-                <small>Výběr obsahuje nejčastější onkogynekologické diagnózy.</small>
-              </label>
-              <div className="form-field full-column">
-                <span>Vedlejší diagnózy</span>
-                <div className="secondary-diagnosis-add">
-                  <select value={secondarySelection} onChange={(event) => setSecondarySelection(event.target.value)}>
-                    <option value="">Vyberte další diagnózu…</option>
-                    {diagnoses
-                      .filter((diagnosis) => diagnosis.code !== primaryDiagnosis)
-                      .map((diagnosis) => (
-                        <option key={diagnosis.code} value={diagnosis.code}>
-                          {diagnosis.code} — {diagnosis.label}
-                        </option>
-                      ))}
-                  </select>
-                  <button className="button button-secondary" type="button" onClick={addSecondaryDiagnosis}>
-                    Přidat
-                  </button>
+              <div className="full-column diagnosis-picker-block diagnosis-picker-block-primary">
+                <MknDiagnosisPicker
+                  label="Hlavní diagnóza MKN-10 *"
+                  value={primaryDiagnosis}
+                  onChange={setPrimaryDiagnosis}
+                  excludeCodes={secondaryDiagnoses}
+                />
+                <p>Úplný český katalog MKN-10-CZ 2026 je dostupný i bez připojení k internetu.</p>
+              </div>
+              <div className="full-column diagnosis-picker-block diagnosis-picker-block-secondary">
+                <div className="secondary-diagnosis-heading">
+                  <div>
+                    <strong>Vedlejší diagnózy</strong>
+                    <span>Volitelné komorbidity a související diagnózy</span>
+                  </div>
+                  {secondarySelection ? (
+                    <button className="button button-secondary" type="button" onClick={addSecondaryDiagnosis}>
+                      Přidat {secondarySelection.code}
+                    </button>
+                  ) : null}
                 </div>
+                <MknDiagnosisPicker
+                  label="Vyhledat vedlejší diagnózu"
+                  value={secondarySelection}
+                  onChange={setSecondarySelection}
+                  excludeCodes={[primaryDiagnosis.code, ...secondaryDiagnoses]}
+                  variant="secondary"
+                />
                 {secondaryDiagnoses.length > 0 && (
                   <div className="diagnosis-tags">
                     {secondaryDiagnoses.map((code) => (

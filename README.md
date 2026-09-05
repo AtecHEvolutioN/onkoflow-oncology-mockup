@@ -1,6 +1,6 @@
 # OnkoFlow — GYN oncology care registry
 
-Czech-language departmental registry for tracking patients through an oncologic care pathway. Version 0.8.2 provides:
+Czech-language departmental registry for tracking patients through an oncologic care pathway. Version 0.9.0 provides:
 
 - a clinical operations dashboard;
 - an urgency-ranked action queue, date-first status indicators and an operational patient table;
@@ -15,7 +15,7 @@ Czech-language departmental registry for tracking patients through an oncologic 
 - a chronological care timeline;
 - upcoming and overdue tasks;
 - immutable file-based audit events for persisted changes;
-- a working **Přijetí pacienta do péče** form with Czech birth-number date parsing and MKN-10 selection;
+- a working **Přijetí pacienta do péče** form with Czech birth-number date parsing and searchable selection across all 16,119 entries in the official MKN-10-CZ 2026 structured catalogue;
 - the clinical pathway **Příjem → Biopsie → Staging → MDT → Terapie**, with waiting states calculated dynamically inside each stage;
 - treatment strategies stored as modifiers of **Terapie**, never as separate major workflow stages;
 - guided one-action phase transitions that update the patient state, next task, progress, and clinical timeline together;
@@ -44,6 +44,16 @@ share, tested backup/restore, and security/privacy governance. See
 The expanded clinical lifecycle is maintained in the
 [clinical workflow specification](docs/CLINICAL-WORKFLOW.md).
 
+## MKN-10-CZ catalogue
+
+The offline diagnosis search is generated from the official ÚZIS structured CSV for
+**MKN-10-CZ, valid from 1 January 2026**. It contains every coded row in the official
+tabular list (16,119 entries); Czech labels are preserved without content edits.
+`scripts/generate-mkn-catalogue.mjs` records the source and catalogue version in the
+generated JSON. Before organizational rollout, the hospital must confirm that its
+intended distribution and use comply with the ÚZIS/WHO terms stated on the official
+MKN-10 publication page.
+
 ## Run locally
 
 ```bash
@@ -58,7 +68,7 @@ Open [http://localhost:3000](http://localhost:3000).
 ### Edge PWA mode (no CMD or executable)
 
 For managed workstations that block command files, open the Vercel HTTPS app once
-in Microsoft Edge. Version 0.8.2 registers a versioned service worker, precaches the
+in Microsoft Edge. Version 0.9.0 registers a versioned service worker, precaches the
 complete static interface, and exposes a PWA manifest. After the green
 `Offline režim připraven` indicator appears, install it from Edge via
 **Apps → Install OnkoFlow**. Subsequent launches can use the cached interface without

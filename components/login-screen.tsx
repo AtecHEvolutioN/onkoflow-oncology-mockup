@@ -158,32 +158,32 @@ export function LoginScreen({
 
   return (
     <main className="login-page">
-      <section className="login-card" aria-labelledby="login-title">
-        <div className="login-brand">
-          <span className="login-brand-mark" aria-hidden="true">
-            <Image
-              className="login-brand-icon"
-              src="/pwa-512.png"
-              alt=""
-              width={54}
-              height={54}
-              priority
-              unoptimized
-            />
-          </span>
+      <section className="login-shell" aria-labelledby="login-title">
+        <aside className="login-brand-panel">
+          <Image
+            className="login-brand-lockup"
+            src="/brand-logo.png"
+            alt="ÚVN – Gynekologický onkologický registr"
+            width={520}
+            height={520}
+            priority
+            unoptimized
+          />
           <div>
-            <strong>OnkoFlow</strong>
-            <span>GYN onkologický registr</span>
+            <p className="eyebrow">Klinický pracovní prostor</p>
+            <h2>OnkoFlow</h2>
+            <p>Bezpečný lokální registr průchodu pacientů onkologickou péčí.</p>
           </div>
-        </div>
+        </aside>
 
-        <div className="login-heading">
-          <p className="eyebrow">Přístup do aplikace</p>
-          <h1 id="login-title">Přihlášení</h1>
-          <p>Připojte datovou složku oddělení a zadejte heslo.</p>
-        </div>
+        <div className="login-card">
+          <div className="login-heading">
+            <p className="eyebrow">Přístup do aplikace</p>
+            <h1 id="login-title">Přihlášení</h1>
+            <p>Vyberte datovou složku oddělení a zadejte heslo.</p>
+          </div>
 
-        <form className="login-form" onSubmit={submit}>
+          <form className="login-form" onSubmit={submit}>
           <label className="form-field login-field">
             <span>Heslo</span>
             <div className="login-input-wrap">
@@ -245,7 +245,8 @@ export function LoginScreen({
             )}
             {isSubmitting ? "Ověřování…" : "Přihlásit se"}
           </button>
-        </form>
+          </form>
+        </div>
       </section>
     </main>
   );

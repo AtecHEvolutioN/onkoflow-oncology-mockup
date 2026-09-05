@@ -34,6 +34,26 @@ requireCondition(
   serviceWorker.includes(`const CACHE_VERSION = "${packageJson.version}"`),
   "service-worker cache version does not match package.json",
 );
+requireCondition(
+  serviceWorker.includes('"/data/mkn-10-cz-2026.json"'),
+  "service worker does not precache the offline MKN catalogue",
+);
+requireCondition(
+  existsSync(join(output, "brand-logo.png")) && existsSync(join(output, "brand-symbol.png")),
+  "ÚVN brand assets are missing from the export",
+);
+
+const mknCatalogue = JSON.parse(
+  readFileSync(join(output, "data", "mkn-10-cz-2026.json"), "utf8"),
+);
+requireCondition(mknCatalogue.version === "MKN-10-CZ 2026", "wrong MKN catalogue version");
+requireCondition(mknCatalogue.count === 16119, "MKN catalogue is incomplete");
+requireCondition(
+  mknCatalogue.diagnoses.some(
+    (diagnosis) => diagnosis.code === "C54.1" && diagnosis.label.includes("endometrium"),
+  ),
+  "MKN catalogue is missing C54.1",
+);
 
 for (const icon of manifest.icons ?? []) {
   const iconPath = join(output, icon.src.replace(/^\//, ""));

@@ -1,10 +1,10 @@
 # OnkoFlow production-readiness gates
 
-OnkoFlow 0.8.2 is an operational folder-backed build. Application-level persistence
+OnkoFlow 0.9.0 is an operational folder-backed build. Application-level persistence
 is implemented, but this repository alone does not constitute hospital approval for
 processing real patient data.
 
-## Implemented in 0.8.2
+## Implemented in 0.9.0
 
 - Explicit selection of the `OnkoFlow\data` directory.
 - Read/write permission must be granted before the application opens.
@@ -31,6 +31,8 @@ processing real patient data.
 - The application starts with an empty registry and does not load seeded patients.
 - User identity is not captured or verified; prototype actions use the generic label
   `Uživatel oddělení`.
+- The complete offline MKN-10-CZ 2026 catalogue is generated from the official ÚZIS
+  structured CSV with labels preserved verbatim and source/version metadata bundled.
 
 The shared password is only a deterrent against accidental access. Because all
 client-side application code is delivered to the workstation, it cannot provide
@@ -55,6 +57,8 @@ secure authentication by itself.
    documented recovery time/recovery point objectives.
 8. **Clinical validation** — approve workflow definitions, MKN data source, required
    fields, terminology and error handling with named clinical owners.
+   Confirm institutional permission for the intended offline redistribution of the
+   Czech MKN catalogue.
 9. **Operational validation** — test offline startup, folder loss, revoked permission,
     full disk, SMB outage, two-workstation collision, interrupted write and upgrade/
     rollback on managed ÚVN workstations.

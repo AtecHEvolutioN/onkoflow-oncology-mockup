@@ -1,0 +1,171 @@
+/* Scoped workspace hierarchy: navigation, current action, then supporting data. */
+.workspace.workspace {
+  --stage-accent: #285bc1;
+  --stage-soft: #eef4ff;
+  --stage-strong: #193f89;
+  font-size: 15px;
+}
+
+.workspace.workspace :global(.workspace.workspace-breadcrumb) {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 150px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.workspace.workspace :global(.workspace.workspace-breadcrumb button) {
+  padding: 8px 3px;
+  border: 0;
+  background: none;
+  color: #51657a;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.workspace.workspace :global(.workspace.workspace-breadcrumb strong) { color: #17354e; }
+.workspace.workspace :global(.nav-item-copy) { display: grid; gap: 4px; text-align: left; }
+.workspace.workspace :global(.nav-item-copy small) { font-size: 12px; font-weight: 400; opacity: .8; }
+.workspace.workspace :global(.main-nav .nav-item) { min-height: 58px; }
+.workspace.workspace :global(.nav-label-admin) { margin-top: 28px; }
+.workspace.workspace :global(.security-card) { border: 0; background: none; box-shadow: none; }
+
+/* The page title is an orientation label, not another coloured card. */
+.workspace.workspace :global(.page-heading) {
+  padding: 4px 0 18px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: #17354e;
+}
+.workspace.workspace :global(.page-heading)::before,
+.workspace.workspace :global(.page-heading)::after { display: none; }
+.workspace.workspace :global(.page-heading h1) { color: #17354e; font-size: 30px; }
+.workspace.workspace :global(.page-heading p) { color: #526579; font-size: 15px; }
+.workspace.workspace :global(.page-content-dashboard > .dashboard-heading .eyebrow) { color: #526579; }
+.workspace.workspace :global(.page-content-dashboard > .dashboard-heading > div > p:last-child) { color: #526579; }
+.workspace.workspace :global(.page-content-dashboard > .dashboard-heading .button-secondary) { color: #17354e; background: white; border-color: #cbd6e2; }
+.workspace.workspace :global(.page-content-dashboard > .dashboard-heading .button-secondary:hover) { background: #edf2f8; }
+.workspace.workspace :global(.panel-header h2) { font-size: 18px; }
+.workspace.workspace :global(.panel-header p) { font-size: 13px; line-height: 1.6; }
+
+/* The worklist, plain registry table and light agenda have different shapes. */
+.workspace.workspace :global(.operational-dashboard-grid .patients-panel) { border-radius: 8px; }
+.workspace.workspace :global(.operational-dashboard-grid .schedule-panel) {
+  border: 0;
+  border-left: 1px solid #ccd6e0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.workspace.workspace :global(.operational-dashboard-grid .schedule-panel > .panel-header) { background: none; }
+.workspace.workspace :global(.dashboard-patient-directory) { border-top: 1px solid #ccd6e0; }
+
+/* Patient identity stays compact and unchanged when switching sections. */
+.workspace.workspace :global(.patient-hero) {
+  min-height: 78px;
+  padding: 14px 20px;
+  border: 1px solid #d5dfe9;
+  border-left: 5px solid #17354e;
+  border-radius: 8px;
+  background: white;
+  box-shadow: none;
+  color: #17354e;
+}
+.workspace.workspace :global(.patient-hero h1) { color: #17354e; font-size: 25px; }
+.workspace.workspace :global(.patient-meta-line),
+.workspace.workspace :global(.patient-meta-line span) { color: #526579; font-size: 14px; }
+.workspace.workspace :global(.patient-header-avatar) { display: none; }
+.workspace.workspace :global(.patient-section-nav) {
+  display: flex;
+  gap: 24px;
+  margin: 0 0 20px;
+  border-bottom: 1px solid #cbd6e2;
+}
+.workspace.workspace :global(.patient-section-nav button) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 12px 4px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  color: #526579;
+  font-size: 16px;
+  font-weight: 600;
+}
+.workspace.workspace :global(.patient-section-nav button[aria-pressed="true"]) {
+  border-bottom-color: #285bc1;
+  color: #194a9e;
+}
+.workspace.workspace :global(.patient-section-nav button span) { font-size: 13px; font-weight: 400; }
+
+.workspace.workspace :global(.patient-profile-pathway) { border: 1px solid #cbd6e2; border-radius: 8px; box-shadow: none; }
+.workspace.workspace :global(.patient-profile-pathway .patient-pathway-header) { background: white; padding: 20px 24px 12px; border-bottom: 0; }
+.workspace.workspace :global(.patient-profile-pathway .patient-pathway-header h2) { color: #17354e; }
+.workspace.workspace :global(.patient-profile-pathway .pathway-step) { padding: 14px 10px; background: none; border-radius: 6px; box-shadow: none; }
+.workspace.workspace :global(.patient-profile-pathway .pathway-step strong) { font-size: 17px; color: #17354e; }
+.workspace.workspace :global(.patient-profile-pathway .pathway-step > span) { font-size: 13px; color: #526579; line-height: 1.5; }
+.workspace.workspace :global(.patient-profile-pathway .pathway-node) { width: 38px; height: 38px; font-size: 17px; background: #edf1f6; color: #526579; border: 1px solid #cbd6e2; }
+.workspace.workspace :global(.patient-profile-pathway .pathway-step.current) { background: #eef4ff; outline: 2px solid #285bc1; outline-offset: -2px; }
+.workspace.workspace :global(.patient-profile-pathway .pathway-step.current .pathway-node) { color: white; background: #285bc1; border-color: #285bc1; }
+.workspace.workspace :global(.patient-profile-pathway .pathway-step::before),
+.workspace.workspace :global(.patient-profile-pathway .pathway-step::after) { top: 33px; background: #cbd6e2; }
+.workspace.workspace :global(.pathway-position) { display: block; font-size: 12px; color: #526579; margin: 3px 0 6px; }
+.workspace.workspace :global(.pathway-step.current .pathway-position) { color: #194a9e; font-weight: 700; }
+.workspace.workspace :global(.patient-profile-pathway .pathway-active-action) { background: #eef4ff; border: 0; border-left: 4px solid #285bc1; border-radius: 4px; box-shadow: none; padding: 20px; }
+.workspace.workspace :global(.patient-profile-pathway .pathway-active-action strong) { font-size: 21px; color: #17354e; }
+.workspace.workspace :global(.patient-profile-pathway .pathway-active-action .button-primary) { background: #285bc1; border-color: #285bc1; color: white; font-size: 15px; min-height: 46px; }
+.workspace.workspace :global(.patient-profile-pathway .pathway-active-action small) { font-size: 14px; color: #526579; }
+.workspace.workspace :global(.pathway-secondary-status) { background: none; border: 0; font-size: 13px; padding: 12px 0 0; }
+
+/* Supporting evidence reads as a document, not nested action cards. */
+.workspace.workspace :global(.diagnosis-overview) { margin-top: 20px; border: 0; border-top: 1px solid #cbd6e2; border-radius: 0; box-shadow: none; background: transparent; }
+.workspace.workspace :global(.diagnosis-overview .panel-header) { padding-left: 0; padding-right: 0; background: none; }
+.workspace.workspace :global(.diagnosis-highlight) { padding: 12px 0; margin: 0; border: 0; background: none; border-radius: 0; }
+.workspace.workspace :global(.diagnosis-highlight h3) { font-size: 18px; }
+.workspace.workspace :global(.episode-facts) { padding: 12px 0 20px; }
+.workspace.workspace :global(.episode-facts strong) { font-size: 15px; }
+.workspace.workspace :global(.clinical-status-links) { display: flex; flex-direction: column; padding: 0; gap: 0; }
+.workspace.workspace :global(.clinical-status-links button) { display: flex; min-height: 64px; width: 100%; border: 0; border-top: 1px solid #d5dfe9; border-radius: 0; background: none; box-shadow: none; padding: 12px 0; }
+.workspace.workspace :global(.clinical-status-links button > div) { flex: 1; display: flex; align-items: baseline; gap: 24px; }
+.workspace.workspace :global(.clinical-status-links strong) { min-width: 85px; font-size: 15px; }
+.workspace.workspace :global(.clinical-status-links small) { font-size: 14px; }
+.workspace.workspace :global(.timeline-panel) { border-radius: 8px; }
+.workspace.workspace :global(.timeline-panel .panel-header) { background: #f1f4f8; }
+.workspace.workspace :global(.timeline-event) { padding-top: 12px; padding-bottom: 12px; }
+.workspace.workspace :global(.timeline-card) { border: 0; background: none; box-shadow: none; }
+.workspace.workspace :global(.timeline-card h3),
+.workspace.workspace :global(.timeline-card p) { font-size: 14px; }
+.workspace.workspace :global(.history-empty) { padding: 20px; font-size: 15px; color: #526579; }
+.workspace.workspace :global(button:focus-visible) { outline: 3px solid #285bc1; outline-offset: 3px; }
+
+@media (max-width: 900px) {
+  .workspace.workspace :global(.workspace.workspace-breadcrumb) { min-width: 0; font-size: 13px; }
+  .workspace.workspace :global(.topbar-search) { min-width: 140px; }
+  .workspace.workspace :global(.operational-dashboard-grid .schedule-panel) { border-left: 0; border-top: 1px solid #cbd6e2; }
+}
+@media (max-width: 720px) {
+  .workspace.workspace :global(.patient-profile-pathway .pathway-step) { grid-template-rows: auto auto auto; gap: 3px 12px; }
+  .workspace.workspace :global(.patient-profile-pathway .pathway-node) { grid-row: 1 / span 3; grid-column: 1; }
+  .workspace.workspace :global(.patient-profile-pathway .pathway-step > strong),
+  .workspace.workspace :global(.patient-profile-pathway .pathway-step > small),
+  .workspace.workspace :global(.patient-profile-pathway .pathway-step > span) { grid-column: 2; margin: 0; }
+}
+@media (max-width: 600px) {
+  .workspace.workspace :global(.workspace.workspace-breadcrumb) { flex: 1; }
+  .workspace.workspace :global(.workspace.workspace-breadcrumb > button),
+  .workspace.workspace :global(.workspace.workspace-breadcrumb > svg) { display: none; }
+  .workspace.workspace :global(.patient-hero) { padding: 14px; }
+  .workspace.workspace :global(.patient-hero h1) { font-size: 22px; }
+  .workspace.workspace :global(.patient-section-nav) { gap: 16px; }
+  .workspace.workspace :global(.patient-section-nav button) { font-size: 14px; }
+  .workspace.workspace :global(.patient-profile-pathway .pathway-active-action) { align-items: stretch; flex-direction: column; }
+  .workspace.workspace :global(.patient-profile-pathway .pathway-active-action strong) { font-size: 19px; }
+  .workspace.workspace :global(.clinical-status-links button > div) { flex-direction: column; gap: 4px; }
+  .workspace.workspace :global(.patient-profile-pathway .patient-pathway-header) { padding: 16px; }
+}

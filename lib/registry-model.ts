@@ -114,23 +114,6 @@ export type Patient = {
   events: TimelineEvent[];
 };
 
-export const diagnoses = [
-  { code: "C51", label: "Zhoubný novotvar vulvy" },
-  { code: "C52", label: "Zhoubný novotvar pochvy" },
-  { code: "C53", label: "Zhoubný novotvar hrdla děložního" },
-  { code: "C53.1", label: "Zhoubný novotvar exocervixu" },
-  { code: "C54", label: "Zhoubný novotvar těla děložního" },
-  { code: "C54.1", label: "Zhoubný novotvar endometria" },
-  { code: "C55", label: "Zhoubný novotvar dělohy, část NS" },
-  { code: "C56", label: "Zhoubný novotvar vaječníku" },
-  { code: "C57", label: "Zhoubný novotvar jiných a neurčených ženských pohlavních orgánů" },
-  { code: "C77", label: "Sekundární a neurčený zhoubný novotvar mízních uzlin" },
-  { code: "C78", label: "Sekundární zhoubný novotvar dýchací a trávicí soustavy" },
-  { code: "C79", label: "Sekundární zhoubný novotvar jiných lokalizací" },
-  { code: "D06", label: "Karcinom in situ hrdla děložního" },
-  { code: "D07", label: "Karcinom in situ jiných a neurčených pohlavních orgánů" },
-];
-
 export const standardStagingExaminations = ["CT", "MRI", "PET/CT", "Tumorové markery"] as const;
 
 export const corePathwaySteps: Array<{
